@@ -327,6 +327,8 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
   const [adherentId, setAdherentId] = useState(user.stock_access?.adherent_id ?? '')
   const [perms, setPerms] = useState<DetailedPerms>(user.perms ?? {})
   const [disabled, setDisabled] = useState(!!user.disabled)
+  const [isCompta, setIsCompta] = useState(!!user.is_compta)
+  const [cpDroits, setCpDroits] = useState(String(user.cp_droits ?? 25))
   const [busy, setBusy] = useState(false)
 
   // Arbre d'objectifs indenté pour l'affichage.
@@ -368,6 +370,8 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
         stock_access,
         perms: role === 'admin' || Object.keys(perms).length === 0 ? null : perms,
         disabled: isSelf ? false : disabled,
+        is_compta: isCompta,
+        cp_droits: Number(cpDroits) || 25,
       })
       // Synchroniser les projets accordés.
       const existing = memberRows.filter((m) => m.profile_id === user.id)
@@ -522,6 +526,17 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
             Un administrateur a accès à tous les modules et à tous les projets, et gère les comptes.
           </p>
         )}
+
+        <div className="grid grid-cols-2 gap-3 items-end">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={isCompta} onChange={(e) => setIsCompta(e.target.checked)} />
+            Service compta (valide les congés après l'admin)
+          </label>
+          <div>
+            <label className="label">Droits de congés payés (jours / an)</label>
+            <input type="number" className="input" min={0} step={0.5} value={cpDroits} onChange={(e) => setCpDroits(e.target.value)} />
+          </div>
+        </div>
 
         {!isSelf && (
           <div className="rounded-lg border border-coral-500/30 p-3 space-y-2">

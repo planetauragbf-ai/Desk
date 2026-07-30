@@ -33,10 +33,11 @@ export default function AssistantPage() {
   const { rows: links } = useTable('links')
   const { rows: channels } = useTable('channels')
   const { rows: messages } = useTable('messages')
+  const { rows: leaves } = useTable('leaves')
 
   const data: AssistantData = useMemo(
-    () => ({ profile, profiles, objectives, tasks, notes, documents, decisions, workflows, links, channels, messages }),
-    [profile, profiles, objectives, tasks, notes, documents, decisions, workflows, links, channels, messages],
+    () => ({ profile, profiles, objectives, tasks, notes, documents, decisions, workflows, links, channels, messages, leaves }),
+    [profile, profiles, objectives, tasks, notes, documents, decisions, workflows, links, channels, messages, leaves],
   )
 
   useEffect(() => {
