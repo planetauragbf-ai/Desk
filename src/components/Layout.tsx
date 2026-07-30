@@ -6,6 +6,7 @@ import { canAccessModule, type ModuleKey } from '../lib/permissions'
 import { useBranding } from '../context/BrandingContext'
 import type { Profile } from '../lib/types'
 import { Avatar } from './ui'
+import NotificationsBell from './NotificationsBell'
 
 interface NavItem {
   to: string
@@ -255,6 +256,7 @@ export default function Layout() {
 
   const navBody = (mini: boolean) => (
     <>
+      <NotificationsBell mini={mini} />
       <NavItems items={deskItems} mini={mini} />
 
       <AppSection logo={logos.projects} label="Planet’Projects" groups={[{ label: null, items: projectItems.length > 1 ? projectItems : [] }]} mini={mini} storageKey="desk-nav-projects" />

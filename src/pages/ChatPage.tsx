@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent 
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
-import { insert, remove } from '../lib/data'
+import { insert, list, remove, update } from '../lib/data'
+import { notify } from '../lib/notify'
 import { can } from '../lib/permissions'
 import { supabase } from '../lib/supabase'
 import { formatDateTime, profileName } from '../lib/format'
@@ -97,6 +98,34 @@ export default function ChatPage() {
     if (el) el.scrollTop = el.scrollHeight
   }, [messages.length, channelId])
 
+  // Ouvrir une conversation marque ses notifications comme lues.
+  useEffect(() => {
+    if (!channelId || !profile) return
+    list('notifications', { user_id: profile.id })
+      .then((rows) =>
+        Promise.all(
+          rows
+            .filter((n) => !n.read && n.link === `/chat?canal=${channelId}`)
+            .map((n) => update('notifications', n.id, { read: true })),
+        ),
+      )
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelId, messages.length])
+
+  /** Notifie les membres d'une conversation privée / d'un groupe. */
+  async function notifyRecipients(preview: string) {
+    if (!channel || (!channel.dm && !channel.private)) return
+    const label = channel.dm ? `votre conversation avec ${profile?.full_name ?? '—'}` : `🔒 ${channel.name}`
+    await Promise.all(
+      members
+        .filter((m) => m.channel_id === channel.id && m.profile_id !== profile?.id)
+        .map((m) =>
+          notify(m.profile_id, `💬 ${profile?.full_name ?? 'Message'} — ${preview} (${label})`, `/chat?canal=${channel.id}`),
+        ),
+    )
+  }
+
   const grouped = useMemo(() => {
     const groups: { author_id: string | null; items: Message[] }[] = []
     for (const m of messages) {
@@ -155,6 +184,7 @@ export default function ChatPage() {
     if (!content || !channelId) return
     setDraft('')
     await insert('messages', { channel_id: channelId, author_id: profile?.id ?? null, content })
+    await notifyRecipients(content.slice(0, 60))
     refreshMessages()
   }
 
@@ -173,6 +203,7 @@ export default function ChatPage() {
         file_name: file.name,
         file_type: type,
       })
+      await notifyRecipients(type === 'image' ? '📷 photo' : `📎 ${file.name}`)
       refreshMessages()
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err))
@@ -199,6 +230,7 @@ export default function ChatPage() {
       content: '',
       poll: { question, options },
     })
+    await notifyRecipients(`📊 sondage : ${question.slice(0, 50)}`)
     setShowPoll(false)
     refreshMessages()
   }
