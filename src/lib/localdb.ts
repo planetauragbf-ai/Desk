@@ -3,7 +3,7 @@
 // n'est pas configurée, afin de pouvoir essayer l'application sans backend.
 import type { TableName, TableRowMap } from './types'
 
-const STORAGE_KEY = 'planet-aura-db-v1'
+const STORAGE_KEY = 'planet-aura-db-v2'
 
 export const DEMO_USER_ID = 'demo-0000-0000-0000-000000000001'
 
@@ -55,11 +55,12 @@ function seed(): Db {
       { id: inst.partenariats, name: 'Partenariats & Financements', parent_id: inst.direction, level: 2, created_at: now },
     ],
     profiles: [
-      { id: users.admin, full_name: 'Aura Admin', email: 'planet.aura.gbf@gmail.com', role: 'admin', instance_id: inst.direction, created_at: now },
-      { id: users.lea, full_name: 'Léa Moreau', email: 'lea@planetaura.org', role: 'referent', instance_id: inst.communication, created_at: now },
-      { id: users.marco, full_name: 'Marco Silva', email: 'marco@planetaura.org', role: 'referent', instance_id: inst.evenements, created_at: now },
-      { id: users.sofia, full_name: 'Sofia Benali', email: 'sofia@planetaura.org', role: 'membre', instance_id: inst.partenariats, created_at: now },
+      { id: users.admin, full_name: 'Aura Admin', email: 'planet.aura.gbf@gmail.com', role: 'admin', instance_id: inst.direction, modules: null, created_at: now },
+      { id: users.lea, full_name: 'Léa Moreau', email: 'lea@planetaura.org', role: 'referent', instance_id: inst.communication, modules: null, created_at: now },
+      { id: users.marco, full_name: 'Marco Silva', email: 'marco@planetaura.org', role: 'referent', instance_id: inst.evenements, modules: null, created_at: now },
+      { id: users.sofia, full_name: 'Sofia Benali', email: 'sofia@planetaura.org', role: 'membre', instance_id: inst.partenariats, modules: null, created_at: now },
     ],
+    objective_members: [],
     objectives: [
       {
         id: obj.cap,
@@ -171,18 +172,19 @@ type Row = { id: string } & Record<string, unknown>
 
 export const localDb = {
   list<K extends TableName>(table: K, where?: Partial<TableRowMap[K]>): TableRowMap[K][] {
-    const rows = load()[table] as unknown as Row[]
+    const rows = (load()[table] ?? []) as unknown as Row[]
     const filtered = where
       ? rows.filter((r) => Object.entries(where).every(([k, v]) => r[k] === v))
       : [...rows]
     return filtered as unknown as TableRowMap[K][]
   },
   get<K extends TableName>(table: K, id: string): TableRowMap[K] | null {
-    const rows = load()[table] as unknown as Row[]
+    const rows = (load()[table] ?? []) as unknown as Row[]
     return (rows.find((r) => r.id === id) as unknown as TableRowMap[K]) ?? null
   },
   insert<K extends TableName>(table: K, row: Partial<TableRowMap[K]>): TableRowMap[K] {
     const db = load()
+    if (!db[table]) (db as Record<string, unknown>)[table] = []
     const full = { id: uid(), created_at: iso(), ...row } as unknown as Row
     ;(db[table] as unknown as Row[]).push(full)
     save(db)

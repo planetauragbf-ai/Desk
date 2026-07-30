@@ -1,23 +1,37 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { computeStats, isCritical, childrenOf } from '../lib/compute'
+import { visibleObjectives } from '../lib/permissions'
 import { formatDate, profileName } from '../lib/format'
 import type { Objective } from '../lib/types'
 import { Badge, Card, EmptyState, GaugeRing, ProgressBar } from '../components/ui'
 
 export default function Pilotage() {
+  const { profile } = useAuth()
   const [view, setView] = useState<'strategique' | 'operationnel'>('strategique')
-  const { rows: objectives } = useTable('objectives')
-  const { rows: tasks } = useTable('tasks')
+  const { rows: allObjectives } = useTable('objectives')
+  const { rows: allTasks } = useTable('tasks')
   const { rows: indicators } = useTable('indicators')
   const { rows: profiles } = useTable('profiles')
+  const { rows: membersRows } = useTable('objective_members')
+
+  const objectives = useMemo(
+    () => visibleObjectives(profile, allObjectives, membersRows, allTasks),
+    [profile, allObjectives, membersRows, allTasks],
+  )
+  const visibleIds = useMemo(() => new Set(objectives.map((o) => o.id)), [objectives])
+  const tasks = useMemo(
+    () => allTasks.filter((t) => !t.objective_id || visibleIds.has(t.objective_id)),
+    [allTasks, visibleIds],
+  )
 
   const statsById = useMemo(() => {
     const m = new Map<string, ReturnType<typeof computeStats>>()
-    for (const o of objectives) m.set(o.id, computeStats(o, objectives, tasks, indicators))
+    for (const o of objectives) m.set(o.id, computeStats(o, allObjectives, allTasks, indicators))
     return m
-  }, [objectives, tasks, indicators])
+  }, [objectives, allObjectives, allTasks, indicators])
 
   const inProgress = objectives.filter((o) => o.status === 'en_cours')
   const notStarted = objectives.filter((o) => o.status === 'non_initie')
@@ -179,7 +193,9 @@ function StrategyMap({ objectives, statsById }: {
   objectives: Objective[]
   statsById: Map<string, ReturnType<typeof computeStats>>
 }) {
-  const roots = objectives.filter((o) => !o.parent_id)
+  // Un objectif dont le parent n'est pas visible est traité comme racine.
+  const idSet = new Set(objectives.map((o) => o.id))
+  const roots = objectives.filter((o) => !o.parent_id || !idSet.has(o.parent_id))
   if (roots.length === 0) return null
 
   // Positionnement simple par niveaux.

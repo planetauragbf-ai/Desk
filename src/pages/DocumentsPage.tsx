@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
+import { visibleObjectives } from '../lib/permissions'
 import { formatDate } from '../lib/format'
 import { insert, remove } from '../lib/data'
 import type { DocumentMeta } from '../lib/types'
@@ -16,15 +17,23 @@ export default function DocumentsPage() {
   const [search, setSearch] = useState('')
 
   const { rows: documents, refresh } = useTable('documents', undefined, { column: 'created_at', ascending: false })
-  const { rows: objectives } = useTable('objectives')
+  const { rows: allObjectives } = useTable('objectives')
+  const { rows: tasks } = useTable('tasks')
+  const { rows: membersRows } = useTable('objective_members')
+
+  const objectives = useMemo(
+    () => visibleObjectives(profile, allObjectives, membersRows, tasks),
+    [profile, allObjectives, membersRows, tasks],
+  )
 
   const filtered = useMemo(() => {
-    let d = documents
+    const visibleIds = new Set(objectives.map((o) => o.id))
+    let d = documents.filter((x) => !x.objective_id || visibleIds.has(x.objective_id))
     if (folder) d = d.filter((x) => x.folder === folder)
     const q = search.trim().toLowerCase()
     if (q) d = d.filter((x) => x.name.toLowerCase().includes(q))
     return d
-  }, [documents, folder, search])
+  }, [documents, objectives, folder, search])
 
   async function createDoc(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()

@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
+import { visibleObjectives } from '../lib/permissions'
 import { formatDate, profileName } from '../lib/format'
 import { insert, remove, update } from '../lib/data'
 import type { Note } from '../lib/types'
@@ -16,13 +17,22 @@ export default function NotesPage() {
 
   const { rows: notes, refresh } = useTable('notes', undefined, { column: 'updated_at', ascending: false })
   const { rows: profiles } = useTable('profiles')
-  const { rows: objectives } = useTable('objectives')
+  const { rows: allObjectives } = useTable('objectives')
+  const { rows: tasks } = useTable('tasks')
+  const { rows: membersRows } = useTable('objective_members')
+
+  const objectives = useMemo(
+    () => visibleObjectives(profile, allObjectives, membersRows, tasks),
+    [profile, allObjectives, membersRows, tasks],
+  )
 
   const filtered = useMemo(() => {
+    const visibleIds = new Set(objectives.map((o) => o.id))
+    const accessible = notes.filter((n) => !n.objective_id || visibleIds.has(n.objective_id))
     const q = search.trim().toLowerCase()
-    if (!q) return notes
-    return notes.filter((n) => n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q))
-  }, [notes, search])
+    if (!q) return accessible
+    return accessible.filter((n) => n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q))
+  }, [notes, objectives, search])
 
   async function saveNote(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()

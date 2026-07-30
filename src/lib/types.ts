@@ -17,6 +17,16 @@ export interface Profile {
   email: string
   role: 'admin' | 'referent' | 'membre'
   instance_id: string | null
+  /** Modules accessibles ; null = tous les modules */
+  modules: string[] | null
+  created_at: string
+}
+
+/** Droit de visibilité d'un salarié sur un objectif (et son sous-arbre) */
+export interface ObjectiveMember {
+  id: string
+  objective_id: string
+  profile_id: string
   created_at: string
 }
 
@@ -135,6 +145,7 @@ export interface Notification {
 export interface TableRowMap {
   instances: Instance
   profiles: Profile
+  objective_members: ObjectiveMember
   objectives: Objective
   tasks: Task
   workflow_templates: WorkflowTemplate

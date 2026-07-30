@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { computeStats } from '../lib/compute'
+import { visibleObjectives } from '../lib/permissions'
 import { formatDate, profileName } from '../lib/format'
 import { insert } from '../lib/data'
 import type { Objective, Priority } from '../lib/types'
@@ -18,12 +19,18 @@ export default function Objectives() {
   const { rows: indicators } = useTable('indicators')
   const { rows: profiles } = useTable('profiles')
   const { rows: instances } = useTable('instances')
+  const { rows: members } = useTable('objective_members')
+
+  const visibles = useMemo(
+    () => visibleObjectives(profile, objectives, members, tasks),
+    [profile, objectives, members, tasks],
+  )
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return objectives
-    return objectives.filter((o) => o.title.toLowerCase().includes(q))
-  }, [objectives, search])
+    if (!q) return visibles
+    return visibles.filter((o) => o.title.toLowerCase().includes(q))
+  }, [visibles, search])
 
   const statsById = useMemo(() => {
     const m = new Map<string, ReturnType<typeof computeStats>>()
@@ -120,7 +127,7 @@ export default function Objectives() {
                 <label className="label">Objectif parent</label>
                 <select name="parent_id" className="input" defaultValue="">
                   <option value="">Aucun (objectif de tête)</option>
-                  {objectives.map((o) => <option key={o.id} value={o.id}>{o.title}</option>)}
+                  {visibles.map((o) => <option key={o.id} value={o.id}>{o.title}</option>)}
                 </select>
               </div>
               <div>

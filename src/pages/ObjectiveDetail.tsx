@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { computeStats } from '../lib/compute'
+import { visibleObjectives } from '../lib/permissions'
 import { formatDate, isPast, profileName, TASK_STATUS_LABELS } from '../lib/format'
 import { insert, remove, update } from '../lib/data'
 import type { Decision, DocumentMeta, Indicator, Note, Priority, Task, TaskStatus } from '../lib/types'
@@ -32,6 +33,7 @@ export default function ObjectiveDetail() {
   const { rows: notes, refresh: refreshNotes } = useTable('notes', undefined, { column: 'updated_at', ascending: false })
   const { rows: documents, refresh: refreshDocs } = useTable('documents', undefined, { column: 'created_at', ascending: false })
   const { rows: decisions, refresh: refreshDecisions } = useTable('decisions', undefined, { column: 'created_at', ascending: false })
+  const { rows: membersRows } = useTable('objective_members')
   const { rows: templates } = useTable('workflow_templates')
   const { rows: steps } = useTable('workflow_steps', undefined, { column: 'position', ascending: true })
   const { rows: actions } = useTable('workflow_actions', undefined, { column: 'position', ascending: true })
@@ -44,6 +46,15 @@ export default function ObjectiveDetail() {
 
   if (!objective || !stats) {
     return <p className="text-aura-700">Objectif introuvable. <Link to="/objectifs" className="underline">Retour aux objectifs</Link></p>
+  }
+
+  const allowed = visibleObjectives(profile, objectives, membersRows, allTasks).some((o) => o.id === objective.id)
+  if (!allowed) {
+    return (
+      <p className="text-aura-700">
+        Vous n'avez pas accès à ce projet. <Link to="/objectifs" className="underline">Retour aux objectifs</Link>
+      </p>
+    )
   }
 
   const children = objectives.filter((o) => o.parent_id === objective.id)

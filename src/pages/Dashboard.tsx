@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { computeStats, isCritical } from '../lib/compute'
+import { visibleObjectives } from '../lib/permissions'
 import { formatDate, isPast } from '../lib/format'
 import { update } from '../lib/data'
 import { Card, StatTile, EmptyState } from '../components/ui'
@@ -10,9 +11,10 @@ import { Card, StatTile, EmptyState } from '../components/ui'
 export default function Dashboard() {
   const { profile } = useAuth()
   const navigate = useNavigate()
-  const { rows: objectives } = useTable('objectives')
+  const { rows: allObjectives } = useTable('objectives')
   const { rows: tasks } = useTable('tasks')
   const { rows: indicators } = useTable('indicators')
+  const { rows: membersRows } = useTable('objective_members')
   const { rows: notes } = useTable('notes', undefined, { column: 'updated_at', ascending: false })
   const { rows: notifications, refresh: refreshNotifs } = useTable(
     'notifications',
@@ -20,6 +22,10 @@ export default function Dashboard() {
     { column: 'created_at', ascending: false },
   )
 
+  const objectives = useMemo(
+    () => visibleObjectives(profile, allObjectives, membersRows, tasks),
+    [profile, allObjectives, membersRows, tasks],
+  )
   const myTasks = useMemo(
     () => tasks.filter((t) => t.assignee_id === profile?.id),
     [tasks, profile],
@@ -30,9 +36,9 @@ export default function Dashboard() {
   )
   const statsById = useMemo(() => {
     const m = new Map<string, ReturnType<typeof computeStats>>()
-    for (const o of objectives) m.set(o.id, computeStats(o, objectives, tasks, indicators))
+    for (const o of objectives) m.set(o.id, computeStats(o, allObjectives, tasks, indicators))
     return m
-  }, [objectives, tasks, indicators])
+  }, [objectives, allObjectives, tasks, indicators])
 
   const critical = objectives.filter((o) => {
     const s = statsById.get(o.id)

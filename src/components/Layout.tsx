@@ -1,35 +1,37 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { demoMode } from '../lib/data'
+import { canAccessModule, type ModuleKey } from '../lib/permissions'
 import { Avatar } from './ui'
 
-const NAV = [
+const NAV: { to: string; label: string; icon: string; module?: ModuleKey }[] = [
   { to: '/tableau-de-bord', label: 'Tableau de bord', icon: '◧' },
-  { to: '/objectifs', label: 'Objectifs', icon: '◎' },
-  { to: '/pilotage', label: 'Pilotage', icon: '⇗' },
-  { to: '/workflows', label: 'Workflows', icon: '⟳' },
-  { to: '/notes', label: 'Notes', icon: '✎' },
-  { to: '/documents', label: 'Documents', icon: '▤' },
-  { to: '/organisation', label: 'Organisation', icon: '⌂' },
+  { to: '/objectifs', label: 'Objectifs', icon: '◎', module: 'objectifs' },
+  { to: '/pilotage', label: 'Pilotage', icon: '⇗', module: 'pilotage' },
+  { to: '/workflows', label: 'Workflows', icon: '⟳', module: 'workflows' },
+  { to: '/notes', label: 'Notes', icon: '✎', module: 'notes' },
+  { to: '/documents', label: 'Documents', icon: '▤', module: 'documents' },
+  { to: '/organisation', label: 'Organisation', icon: '⌂', module: 'organisation' },
 ]
 
 export default function Layout() {
   const { profile, signOut } = useAuth()
+  const items = NAV.filter((item) => !item.module || canAccessModule(profile, item.module))
 
   return (
     <div className="min-h-screen flex">
       <aside className="w-60 shrink-0 bg-aura-950 text-white flex flex-col">
         <div className="px-5 py-6">
           <div className="flex items-center gap-2.5">
-            <img src="/favicon.svg" alt="" className="h-9 w-9" />
+            <img src="/logo.png" alt="Planet AURA" className="h-10 w-10 rounded-full bg-white/90 p-0.5" />
             <div>
-              <div className="font-extrabold leading-tight">Planet AURA</div>
-              <div className="text-[11px] text-white/60 leading-tight">Organisation</div>
+              <div className="font-extrabold leading-tight">Planet'Projects</div>
+              <div className="text-[11px] text-white/60 leading-tight">Planet AURA</div>
             </div>
           </div>
         </div>
         <nav className="flex-1 px-3 space-y-1">
-          {NAV.map((item) => (
+          {items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -43,6 +45,19 @@ export default function Layout() {
               {item.label}
             </NavLink>
           ))}
+          {profile?.role === 'admin' && (
+            <NavLink
+              to="/administration"
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive ? 'bg-white/15 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'
+                }`
+              }
+            >
+              <span className="text-base w-5 text-center">⚙</span>
+              Administration
+            </NavLink>
+          )}
         </nav>
         <div className="px-5 py-4 border-t border-white/10">
           {profile && (
