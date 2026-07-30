@@ -61,6 +61,7 @@ function seed(): Db {
       { id: users.sofia, full_name: 'Sofia Benali', email: 'sofia@planetaura.org', role: 'membre', instance_id: inst.partenariats, modules: null, created_at: now },
     ],
     objective_members: [],
+    app_settings: [],
     objectives: [
       {
         id: obj.cap,

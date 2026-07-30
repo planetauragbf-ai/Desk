@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useBranding } from '../context/BrandingContext'
 
 export default function Login() {
   const { signIn, signUp } = useAuth()
+  const { logoUrl } = useBranding()
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -34,7 +36,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-aura-950 via-aura-800 to-accent-500 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
         <div className="flex items-center gap-3 mb-6">
-          <img src="/logo.png" alt="Planet AURA" className="h-12 w-12 rounded-full" />
+          <img src={logoUrl} alt="Planet AURA" className="h-12 w-12 rounded-full object-contain" />
           <div>
             <h1 className="text-xl font-extrabold text-aura-900">Planet'Projects</h1>
             <p className="text-xs text-aura-700">Le pilotage des projets de Planet AURA</p>

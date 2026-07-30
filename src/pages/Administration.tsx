@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ChangeEvent } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { DEFAULT_LOGO, useBranding } from '../context/BrandingContext'
 import { useTable } from '../hooks/useTable'
 import { insert, remove, update } from '../lib/data'
 import { MODULES } from '../lib/permissions'
@@ -23,9 +24,11 @@ export default function Administration() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-extrabold">Administration des comptes</h1>
+      <h1 className="text-2xl font-extrabold">Administration</h1>
 
-      <Card>
+      <BrandingCard />
+
+      <Card title="Comptes salariés">
         <p className="text-sm text-aura-700/80 mb-4">
           Gérez ici les accès de chaque salarié : son rôle, les onglets (modules) qu'il voit dans le menu,
           et les projets auxquels il a accès. Un salarié voit automatiquement les projets dont il est
@@ -99,6 +102,70 @@ export default function Administration() {
         />
       )}
     </div>
+  )
+}
+
+function BrandingCard() {
+  const { logoUrl, setLogo, resetLogo } = useBranding()
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  async function onFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setBusy(true)
+    setMessage(null)
+    setError(null)
+    try {
+      await setLogo(file)
+      setMessage('Logo mis à jour. Il s’applique immédiatement pour tous les utilisateurs.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onReset() {
+    if (!confirm('Revenir au logo par défaut ?')) return
+    setBusy(true)
+    setMessage(null)
+    setError(null)
+    try {
+      await resetLogo()
+      setMessage('Logo par défaut restauré.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card title="Personnalisation — Logo de l'application">
+      <div className="flex flex-wrap items-center gap-5">
+        <img src={logoUrl} alt="Logo actuel" className="h-20 w-20 rounded-full border border-aura-100 object-contain bg-white" />
+        <div className="flex-1 min-w-60">
+          <p className="text-sm text-aura-700/80 mb-3">
+            Téléversez votre logo (PNG, JPG, SVG ou WebP — idéalement carré, 512×512 px). Il remplace le
+            logo dans le menu, sur l'écran de connexion et dans l'onglet du navigateur, pour tout le monde.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className={`btn-primary cursor-pointer ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
+              {busy ? 'Envoi en cours…' : 'Choisir un fichier…'}
+              <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden" onChange={onFile} disabled={busy} />
+            </label>
+            {logoUrl !== DEFAULT_LOGO && (
+              <button className="btn-secondary" onClick={onReset} disabled={busy}>Revenir au logo par défaut</button>
+            )}
+          </div>
+          {message && <p className="text-sm text-emerald-700 mt-2">{message}</p>}
+          {error && <p className="text-sm text-coral-600 mt-2">{error}</p>}
+        </div>
+      </div>
+    </Card>
   )
 }
 

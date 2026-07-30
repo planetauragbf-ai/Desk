@@ -142,10 +142,19 @@ export interface Notification {
   created_at: string
 }
 
+/** Réglage global de l'application (clé/valeur), ex. logo personnalisé */
+export interface AppSetting {
+  id: string
+  key: string
+  value: string
+  updated_at: string
+}
+
 export interface TableRowMap {
   instances: Instance
   profiles: Profile
   objective_members: ObjectiveMember
+  app_settings: AppSetting
   objectives: Objective
   tasks: Task
   workflow_templates: WorkflowTemplate

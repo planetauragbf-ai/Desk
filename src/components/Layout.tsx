@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { demoMode } from '../lib/data'
 import { canAccessModule, type ModuleKey } from '../lib/permissions'
+import { useBranding } from '../context/BrandingContext'
 import { Avatar } from './ui'
 
 const NAV: { to: string; label: string; icon: string; module?: ModuleKey }[] = [
@@ -16,6 +17,7 @@ const NAV: { to: string; label: string; icon: string; module?: ModuleKey }[] = [
 
 export default function Layout() {
   const { profile, signOut } = useAuth()
+  const { logoUrl } = useBranding()
   const items = NAV.filter((item) => !item.module || canAccessModule(profile, item.module))
 
   return (
@@ -23,7 +25,7 @@ export default function Layout() {
       <aside className="w-60 shrink-0 bg-aura-950 text-white flex flex-col">
         <div className="px-5 py-6">
           <div className="flex items-center gap-2.5">
-            <img src="/logo.png" alt="Planet AURA" className="h-10 w-10 rounded-full bg-white/90 p-0.5" />
+            <img src={logoUrl} alt="Planet AURA" className="h-10 w-10 rounded-full bg-white/90 p-0.5 object-contain" />
             <div>
               <div className="font-extrabold leading-tight">Planet'Projects</div>
               <div className="text-[11px] text-white/60 leading-tight">Planet AURA</div>
