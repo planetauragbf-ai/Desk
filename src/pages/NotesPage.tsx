@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
-import { visibleObjectives } from '../lib/permissions'
+import { can, visibleObjectives } from '../lib/permissions'
 import { formatDate, profileName } from '../lib/format'
 import { insert, remove, update } from '../lib/data'
 import type { Note } from '../lib/types'
@@ -60,7 +60,9 @@ export default function NotesPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-extrabold">Notes</h1>
-        <button className="btn-primary" onClick={() => setParams({ nouvelle: '1' })}>+ Ajouter une note</button>
+        {can(profile, 'notes_ajout') && (
+          <button className="btn-primary" onClick={() => setParams({ nouvelle: '1' })}>+ Ajouter une note</button>
+        )}
       </div>
 
       <Card>
@@ -73,13 +75,15 @@ export default function NotesPage() {
               <article key={n.id} className="rounded-lg border border-aura-100 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-bold">{n.title}</h3>
-                  <div className="flex gap-3 text-xs">
-                    <button className="text-aura-700 underline" onClick={() => setEditing(n)}>Modifier</button>
-                    <button
-                      className="text-coral-600 underline"
-                      onClick={async () => { if (confirm('Supprimer cette note ?')) { await remove('notes', n.id); refresh() } }}
-                    >Supprimer</button>
-                  </div>
+                  {can(profile, 'notes_ajout') && (
+                    <div className="flex gap-3 text-xs">
+                      <button className="text-aura-700 underline" onClick={() => setEditing(n)}>Modifier</button>
+                      <button
+                        className="text-coral-600 underline"
+                        onClick={async () => { if (confirm('Supprimer cette note ?')) { await remove('notes', n.id); refresh() } }}
+                      >Supprimer</button>
+                    </div>
+                  )}
                 </div>
                 <p className="text-sm text-aura-800 whitespace-pre-wrap mt-1">{n.content}</p>
                 <p className="text-[11px] text-aura-700/60 mt-2">

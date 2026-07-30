@@ -3,8 +3,8 @@ import { useAuth } from '../context/AuthContext'
 import { APP_INFO, useBranding, type AppKey } from '../context/BrandingContext'
 import { useTable } from '../hooks/useTable'
 import { insert, remove, update } from '../lib/data'
-import { MODULES } from '../lib/permissions'
-import type { Objective, Profile, StockAccess } from '../lib/types'
+import { MODULES, PERM_DETAILS } from '../lib/permissions'
+import type { DetailedPerms, Objective, Profile, StockAccess } from '../lib/types'
 import { Avatar, Card, EmptyState, Modal } from '../components/ui'
 
 export default function Administration() {
@@ -64,7 +64,13 @@ export default function Administration() {
                         <div className="flex items-center gap-2.5">
                           <Avatar name={p.full_name} />
                           <div>
-                            <div className="font-semibold">{p.full_name}{p.id === me.id && <span className="text-xs text-aura-700/60"> (vous)</span>}</div>
+                            <div className="font-semibold">
+                              {p.full_name}
+                              {p.id === me.id && <span className="text-xs text-aura-700/60"> (vous)</span>}
+                              {p.disabled && (
+                                <span className="ml-2 rounded-full bg-coral-500/15 text-coral-600 px-2 py-0.5 text-[10px] font-bold uppercase">Désactivé</span>
+                              )}
+                            </div>
                             <div className="text-xs text-aura-700/60">{p.email}</div>
                           </div>
                         </div>
@@ -260,8 +266,10 @@ function BrandingCard() {
 
   const descriptions: Record<AppKey, string> = {
     desk: 'Portail : menu, écran de connexion et onglet du navigateur.',
-    projects: 'Application de pilotage des projets (section du menu).',
-    stock: 'Application de stockage & picking (section du menu).',
+    projects: 'Application de pilotage des projets.',
+    dash: 'Dashboard de suivi logistique (à venir).',
+    stock: 'Application de stockage & picking.',
+    claim: 'Gestion des sinistres (à venir).',
   }
 
   return (
@@ -271,7 +279,7 @@ function BrandingCard() {
         Planet'Stock possède aussi son propre réglage de logo interne (fiches QR et relevés imprimés)
         dans son onglet Réglages.
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {(Object.keys(APP_INFO) as AppKey[]).map((app) => (
           <div key={app} className="rounded-lg border border-aura-100 p-4 text-center">
             <img src={logos[app]} alt={APP_INFO[app].name} className="h-16 w-16 mx-auto rounded-full border border-aura-100 object-contain bg-white" />
@@ -317,6 +325,8 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
     user.stock_access?.permissions ?? { entrees: true, sorties: true, espaces: true, facturation: false, compta: false, grille: false },
   )
   const [adherentId, setAdherentId] = useState(user.stock_access?.adherent_id ?? '')
+  const [perms, setPerms] = useState<DetailedPerms>(user.perms ?? {})
+  const [disabled, setDisabled] = useState(!!user.disabled)
   const [busy, setBusy] = useState(false)
 
   // Arbre d'objectifs indenté pour l'affichage.
@@ -356,6 +366,8 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
         instance_id: instanceId || null,
         modules: role === 'admin' || allModules ? null : moduleKeys,
         stock_access,
+        perms: role === 'admin' || Object.keys(perms).length === 0 ? null : perms,
+        disabled: isSelf ? false : disabled,
       })
       // Synchroniser les projets accordés.
       const existing = memberRows.filter((m) => m.profile_id === user.id)
@@ -414,6 +426,32 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
                   <p className="col-span-2 text-[11px] text-aura-700/60">Le tableau de bord est toujours accessible.</p>
                 </div>
               )}
+            </div>
+
+            <div>
+              <label className="label">Autorisations détaillées</label>
+              <p className="text-[11px] text-aura-700/60 mb-2">
+                Décochez pour interdire l'action à ce salarié (il gardera la consultation).
+              </p>
+              <div className="grid grid-cols-1 gap-1.5 rounded-lg border border-aura-100 p-3">
+                {PERM_DETAILS.map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={perms[key] !== false}
+                      onChange={() =>
+                        setPerms((p) => {
+                          const next = { ...p }
+                          if (next[key] === false) delete next[key]
+                          else next[key] = false
+                          return next
+                        })
+                      }
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
             </div>
 
             <div>
@@ -483,6 +521,33 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
           <p className="text-sm text-aura-700/80 rounded-lg bg-aura-50 p-3">
             Un administrateur a accès à tous les modules et à tous les projets, et gère les comptes.
           </p>
+        )}
+
+        {!isSelf && (
+          <div className="rounded-lg border border-coral-500/30 p-3 space-y-2">
+            <div className="text-xs font-bold text-coral-600 uppercase tracking-wide">Zone sensible</div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={disabled} onChange={(e) => setDisabled(e.target.checked)} />
+              Désactiver l'accès (le salarié ne peut plus se connecter, ses données sont conservées)
+            </label>
+            <button
+              className="text-sm text-coral-600 underline"
+              disabled={busy}
+              onClick={async () => {
+                if (!confirm(`Supprimer définitivement le compte de ${user.full_name} ?`)) return
+                if (!confirm('Cette action est irréversible (ses attributions de projets et notifications sont supprimées ; ses tâches et documents restent, sans auteur). Confirmer ?')) return
+                setBusy(true)
+                try {
+                  await remove('profiles', user.id)
+                  onSaved()
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            >
+              Supprimer définitivement ce compte
+            </button>
+          </div>
         )}
 
         <div className="flex justify-end gap-2 pt-1">

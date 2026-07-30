@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { demoMode } from '../lib/data'
 import { canAccessModule, type ModuleKey } from '../lib/permissions'
 import { useBranding } from '../context/BrandingContext'
+import type { Profile } from '../lib/types'
 import { Avatar } from './ui'
 
 interface NavItem {
@@ -13,9 +14,9 @@ interface NavItem {
   module?: ModuleKey
 }
 
-// Planet'Desk : le portail (espaces communs) héberge deux applications,
-// chacune avec son logo et son sous-menu repliable — Planet'Projects
-// (pilotage) et Planet'Stock (stockage & picking).
+// Planet'Desk : le portail (espaces communs) héberge les applications,
+// chacune avec son logo et son sous-menu repliable, dans l'ordre :
+// Planet'Projects, Planet'Dash, Planet'Stock, Planet'Claim.
 const DESK_NAV: NavItem[] = [
   { to: '/tableau-de-bord', label: 'Accueil', icon: '◧' },
   { to: '/chat', label: 'Chat interne', icon: '💬', module: 'chat' },
@@ -33,9 +34,62 @@ const PROJECTS_NAV: NavItem[] = [
   { to: '/organisation', label: 'Organisation', icon: '⌂', module: 'organisation' },
 ]
 
-const STOCK_NAV: NavItem[] = [
-  { to: '/stock', label: 'Stockage & picking', icon: '📦', module: 'stock' },
+const DASH_NAV: NavItem[] = [
+  { to: '/dash', label: 'Suivi logistique', icon: '📈', module: 'dash' },
 ]
+
+const CLAIM_NAV: NavItem[] = [
+  { to: '/claim', label: 'Gestion des sinistres', icon: '🛡', module: 'claim' },
+]
+
+/**
+ * Sous-menu Planet'Stock : les onglets de l'application, directement dans
+ * le bandeau gauche (l'app n'ouvre plus son propre menu). La liste dépend
+ * des droits stock du salarié définis par l'admin.
+ */
+function stockNav(profile: Profile | null): NavItem[] {
+  const t = (id: string, label: string, icon: string): NavItem => ({
+    to: `/stock?onglet=${id}`,
+    label,
+    icon,
+    module: 'stock',
+  })
+  const acc = profile?.stock_access ?? null
+  const role = acc?.role ?? (profile?.role === 'admin' ? 'admin' : null)
+
+  if (role === 'adherent') return [t('adherent', 'Mon espace', '👤')]
+
+  if (role === 'admin') {
+    return [
+      t('dashboard', 'Dashboard', '📊'),
+      t('adherents', 'Adhérents', '👥'),
+      t('entrees', 'Entrées', '📥'),
+      t('references', 'Références', '🍷'),
+      t('sorties', 'Sorties', '📤'),
+      t('espaces', 'Espaces', '🗄'),
+      t('facturation', 'Relevés', '🧾'),
+      t('compta', 'Compta matière', '⚖'),
+      t('grille', 'Tarifs', '📋'),
+      t('journal', 'Journal', '📝'),
+      t('users', 'Utilisateurs', '🔐'),
+      t('reglages', 'Réglages', '⚙'),
+    ]
+  }
+
+  // Logisticien (droits choisis par l'admin) ou correspondance email : on
+  // n'affiche que les onglets autorisés.
+  const p = acc?.role === 'logisticien' ? acc.permissions ?? {} : null
+  const ok = (k: keyof NonNullable<typeof p>) => p === null || !!p[k]
+  const items = [t('dashboard', 'Dashboard', '📊')]
+  if (ok('entrees')) items.push(t('entrees', 'Entrées', '📥'), t('references', 'Références', '🍷'))
+  if (ok('sorties')) items.push(t('sorties', 'Sorties', '📤'))
+  if (ok('espaces')) items.push(t('espaces', 'Espaces', '🗄'))
+  if (ok('facturation')) items.push(t('facturation', 'Relevés', '🧾'))
+  if (ok('compta')) items.push(t('compta', 'Compta matière', '⚖'))
+  if (ok('grille')) items.push(t('grille', 'Tarifs', '📋'))
+  items.push(t('journal', 'Journal', '📝'))
+  return items
+}
 
 function usePersistedBool(key: string, initial: boolean): [boolean, (v: boolean) => void] {
   const [value, setValue] = useState(() => {
@@ -56,28 +110,42 @@ function usePersistedBool(key: string, initial: boolean): [boolean, (v: boolean)
   return [value, setValue]
 }
 
+const itemClass = (active: boolean, mini: boolean) =>
+  `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+    mini ? 'justify-center px-0' : ''
+  } ${active ? 'bg-accent-500/10 text-accent-500' : 'text-aura-700 hover:bg-aura-50 hover:text-aura-900'}`
+
 function NavItems({ items, mini }: { items: NavItem[]; mini: boolean }) {
+  const { pathname, search } = useLocation()
   return (
     <>
-      {items.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          title={item.label}
-          className={({ isActive }) =>
-            `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-              mini ? 'justify-center px-0' : ''
-            } ${
-              isActive
-                ? 'bg-accent-500/10 text-accent-500'
-                : 'text-aura-700 hover:bg-aura-50 hover:text-aura-900'
-            }`
-          }
-        >
-          <span className="text-base w-5 text-center shrink-0">{item.icon}</span>
-          {!mini && item.label}
-        </NavLink>
-      ))}
+      {items.map((item) => {
+        // Liens avec paramètres (onglets Planet'Stock) : activité calculée
+        // sur le chemin ET l'onglet courant.
+        if (item.to.includes('?')) {
+          const [path, query] = item.to.split('?')
+          const wanted = new URLSearchParams(query).get('onglet') ?? 'dashboard'
+          const current = new URLSearchParams(search).get('onglet') ?? 'dashboard'
+          const active = pathname === path && wanted === current
+          return (
+            <Link key={item.to} to={item.to} title={item.label} className={itemClass(active, mini)}>
+              <span className="text-base w-5 text-center shrink-0">{item.icon}</span>
+              {!mini && item.label}
+            </Link>
+          )
+        }
+        return (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            title={item.label}
+            className={({ isActive }) => itemClass(isActive, mini)}
+          >
+            <span className="text-base w-5 text-center shrink-0">{item.icon}</span>
+            {!mini && item.label}
+          </NavLink>
+        )
+      })}
     </>
   )
 }
@@ -129,8 +197,10 @@ export default function Layout() {
     items.filter((item) => !item.module || canAccessModule(profile, item.module))
   const deskItems = visible(DESK_NAV)
   const projectItems = visible(PROJECTS_NAV)
-  const stockItems = visible(STOCK_NAV)
-  // Planet'Stock embarque sa propre mise en page : pleine largeur, sans marges.
+  const dashItems = visible(DASH_NAV)
+  const stockItems = visible(stockNav(profile))
+  const claimItems = visible(CLAIM_NAV)
+  // Planet'Stock embarque son propre fond : pleine largeur, sans marges.
   const fullBleed = pathname.startsWith('/stock')
 
   return (
@@ -153,25 +223,10 @@ export default function Layout() {
         <nav className={`flex-1 space-y-1 overflow-y-auto pb-4 ${collapsed ? 'px-2' : 'px-3'}`}>
           <NavItems items={deskItems} mini={collapsed} />
 
-          {projectItems.length > 1 && (
-            <AppSection
-              logo={logos.projects}
-              label="Planet’Projects"
-              items={projectItems}
-              mini={collapsed}
-              storageKey="desk-nav-projects"
-            />
-          )}
-
-          {stockItems.length > 0 && (
-            <AppSection
-              logo={logos.stock}
-              label="Planet’Stock"
-              items={stockItems}
-              mini={collapsed}
-              storageKey="desk-nav-stock"
-            />
-          )}
+          <AppSection logo={logos.projects} label="Planet’Projects" items={projectItems.length > 1 ? projectItems : []} mini={collapsed} storageKey="desk-nav-projects" />
+          <AppSection logo={logos.dash} label="Planet’Dash" items={dashItems} mini={collapsed} storageKey="desk-nav-dash" />
+          <AppSection logo={logos.stock} label="Planet’Stock" items={stockItems} mini={collapsed} storageKey="desk-nav-stock" />
+          <AppSection logo={logos.claim} label="Planet’Claim" items={claimItems} mini={collapsed} storageKey="desk-nav-claim" />
 
           {profile?.role === 'admin' && (
             <>
@@ -183,15 +238,7 @@ export default function Layout() {
               <NavLink
                 to="/administration"
                 title="Administration"
-                className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    collapsed ? 'justify-center px-0 mt-3' : ''
-                  } ${
-                    isActive
-                      ? 'bg-accent-500/10 text-accent-500'
-                      : 'text-aura-700 hover:bg-aura-50 hover:text-aura-900'
-                  }`
-                }
+                className={({ isActive }) => `${itemClass(isActive, collapsed)} ${collapsed ? 'mt-3' : ''}`}
               >
                 <span className="text-base w-5 text-center shrink-0">⚙</span>
                 {!collapsed && 'Administration'}

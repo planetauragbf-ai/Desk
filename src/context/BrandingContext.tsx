@@ -8,12 +8,14 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { insert, list, remove, update } from '../lib/data'
 import { supabase } from '../lib/supabase'
 
-export type AppKey = 'desk' | 'projects' | 'stock'
+export type AppKey = 'desk' | 'projects' | 'dash' | 'stock' | 'claim'
 
 export const APP_INFO: Record<AppKey, { name: string; settingKey: string; defaultLogo: string }> = {
   desk: { name: "Planet'Desk", settingKey: 'logo_url', defaultLogo: '/logo.png' },
   projects: { name: "Planet'Projects", settingKey: 'logo_projects_url', defaultLogo: '/logo-projects.svg' },
+  dash: { name: "Planet'Dash", settingKey: 'logo_dash_url', defaultLogo: '/logo-dash.svg' },
   stock: { name: "Planet'Stock", settingKey: 'logo_stock_url', defaultLogo: '/logo-stock.svg' },
+  claim: { name: "Planet'Claim", settingKey: 'logo_claim_url', defaultLogo: '/logo-claim.svg' },
 }
 
 export const DEFAULT_LOGO = APP_INFO.desk.defaultLogo
@@ -31,7 +33,9 @@ interface BrandingState {
 const DEFAULT_LOGOS: Logos = {
   desk: APP_INFO.desk.defaultLogo,
   projects: APP_INFO.projects.defaultLogo,
+  dash: APP_INFO.dash.defaultLogo,
   stock: APP_INFO.stock.defaultLogo,
+  claim: APP_INFO.claim.defaultLogo,
 }
 
 const BrandingContext = createContext<BrandingState>({

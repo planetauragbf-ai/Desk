@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { insert, remove } from '../lib/data'
+import { can } from '../lib/permissions'
 import { supabase } from '../lib/supabase'
 import { formatDateTime, profileName } from '../lib/format'
 import type { Message } from '../lib/types'
@@ -92,7 +93,9 @@ export default function ChatPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-extrabold">Chat interne</h1>
-        <button className="btn-primary" onClick={() => setShowNewChannel(true)}>+ Nouveau canal</button>
+        {can(profile, 'chat_canaux') && (
+          <button className="btn-primary" onClick={() => setShowNewChannel(true)}>+ Nouveau canal</button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-5 items-start">

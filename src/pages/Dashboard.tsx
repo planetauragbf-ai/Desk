@@ -10,7 +10,7 @@ export default function Dashboard() {
   const { profile } = useAuth()
   const { logos } = useBranding()
 
-  const apps: { logo: string; to: string; module: ModuleKey; title: string; desc: string }[] = [
+  const apps: { logo: string; to: string; module: ModuleKey; title: string; desc: string; soon?: boolean }[] = [
     {
       logo: logos.projects,
       to: '/projets',
@@ -19,11 +19,27 @@ export default function Dashboard() {
       desc: 'Pilotage : objectifs, plans d’actions, process, notes et décisions.',
     },
     {
+      logo: logos.dash,
+      to: '/dash',
+      module: 'dash',
+      title: 'Planet’Dash',
+      desc: 'Dashboard de suivi logistique.',
+      soon: true,
+    },
+    {
       logo: logos.stock,
       to: '/stock',
       module: 'stock',
       title: 'Planet’Stock',
       desc: 'Stockage & picking : références, entrées/sorties, espaces, relevés.',
+    },
+    {
+      logo: logos.claim,
+      to: '/claim',
+      module: 'claim',
+      title: 'Planet’Claim',
+      desc: 'Gestion des sinistres.',
+      soon: true,
     },
   ]
 
@@ -58,7 +74,14 @@ export default function Dashboard() {
               >
                 <img src={a.logo} alt={a.title} className="h-14 w-14 rounded-full border border-aura-100 bg-white object-contain" />
                 <div className="min-w-0">
-                  <div className="text-base font-extrabold text-aura-950">{a.title}</div>
+                  <div className="text-base font-extrabold text-aura-950 flex items-center gap-2">
+                    {a.title}
+                    {a.soon && (
+                      <span className="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                        Bientôt
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-aura-700/80 mt-0.5">{a.desc}</div>
                 </div>
                 <span className="ml-auto text-accent-500 text-xl">→</span>

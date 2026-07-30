@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
-import { visibleObjectives } from '../lib/permissions'
+import { can, visibleObjectives } from '../lib/permissions'
 import { formatDate } from '../lib/format'
 import { insert, remove, update } from '../lib/data'
 import type { DocumentMeta } from '../lib/types'
@@ -104,8 +104,12 @@ export default function DocumentsPage() {
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-extrabold">Documents</h1>
         <div className="flex gap-2">
-          <button className="btn-secondary" onClick={createFolder}>+ Nouveau dossier</button>
-          <button className="btn-primary" onClick={() => setShowNew(true)}>+ Ajouter un document</button>
+          {can(profile, 'documents_dossiers') && (
+            <button className="btn-secondary" onClick={createFolder}>+ Nouveau dossier</button>
+          )}
+          {can(profile, 'documents_ajout') && (
+            <button className="btn-primary" onClick={() => setShowNew(true)}>+ Ajouter un document</button>
+          )}
         </div>
       </div>
 
@@ -124,7 +128,7 @@ export default function DocumentsPage() {
                 <span className="text-2xl">🗂</span>
                 <span className="text-xs font-semibold">{f}</span>
                 <span className="text-[10px] text-aura-700/60">{count} fichier(s)</span>
-                {f !== 'Général' && (
+                {f !== 'Général' && can(profile, 'documents_dossiers') && (
                   <span className="absolute -top-2 -right-2 hidden group-hover:flex gap-1">
                     <button
                       className="h-5 w-5 rounded-full bg-white border border-aura-100 text-[10px] shadow-sm hover:bg-aura-50"
@@ -172,16 +176,20 @@ export default function DocumentsPage() {
                   </td>
                   <td className="table-cell whitespace-nowrap">{formatDate(d.created_at)}</td>
                   <td className="table-cell whitespace-nowrap">
-                    <button
-                      className="text-aura-700/60 hover:text-aura-900 mr-2"
-                      onClick={() => setEditing(d)}
-                      aria-label="Modifier"
-                    >✎</button>
-                    <button
-                      className="text-aura-700/60 hover:text-coral-600"
-                      onClick={async () => { if (confirm('Supprimer ce document ?')) { await remove('documents', d.id); refresh() } }}
-                      aria-label="Supprimer"
-                    >🗑</button>
+                    {can(profile, 'documents_ajout') && (
+                      <>
+                        <button
+                          className="text-aura-700/60 hover:text-aura-900 mr-2"
+                          onClick={() => setEditing(d)}
+                          aria-label="Modifier"
+                        >✎</button>
+                        <button
+                          className="text-aura-700/60 hover:text-coral-600"
+                          onClick={async () => { if (confirm('Supprimer ce document ?')) { await remove('documents', d.id); refresh() } }}
+                          aria-label="Supprimer"
+                        >🗑</button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
