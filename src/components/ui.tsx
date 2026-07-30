@@ -111,15 +111,16 @@ export function EmptyState({ children }: { children: ReactNode }) {
   return <p className="text-sm text-aura-700/70 py-6 text-center">{children}</p>
 }
 
-export function Modal({ title, onClose, children }: {
+export function Modal({ title, onClose, children, wide = false }: {
   title: string
   onClose: () => void
   children: ReactNode
+  wide?: boolean
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-aura-950/50 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
+        className={`w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
