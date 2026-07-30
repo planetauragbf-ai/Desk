@@ -14,7 +14,12 @@ export default function StockPage() {
       <StockApp
         session={
           profile
-            ? { email: profile.email, fullName: profile.full_name, isAdmin: profile.role === 'admin' }
+            ? {
+                email: profile.email,
+                fullName: profile.full_name,
+                isAdmin: profile.role === 'admin',
+                stockAccess: profile.stock_access ?? null,
+              }
             : undefined
         }
       />

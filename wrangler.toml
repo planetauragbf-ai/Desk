@@ -1,6 +1,7 @@
 # Configuration Cloudflare Workers (site statique avec assets)
 # Build Cloudflare : commande de build `npm run build`, déploiement `npx wrangler deploy`.
-name = "planet-aura-organisation"
+# URL de l'application : https://planet-desk.<sous-domaine-compte>.workers.dev
+name = "planet-desk"
 compatibility_date = "2026-07-01"
 
 [assets]

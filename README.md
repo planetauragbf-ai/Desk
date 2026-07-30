@@ -1,6 +1,16 @@
-# Planet Aura · Organisation
+# Planet'Desk · Planet Aura
 
-Application de **pilotage organisationnel** pour Planet Aura, inspirée de la méthodologie Eidō Organisations : posez vos objectifs, gérez vos projets, suivez vos plans d'actions, partagez l'information.
+**Planet'Desk** est le bureau numérique unique de Planet Aura : **une seule connexion** donne accès à tout, et l'administrateur (Emma) crée les comptes puis décide, personne par personne, qui accède à quoi dans chaque application.
+
+Planet'Desk héberge :
+
+| Application | Contenu | Logo |
+|---|---|---|
+| **Planet'Projects** | Pilotage : objectifs, plans d'actions, process (workflows), notes, décisions, organisation | personnalisable |
+| **Planet'Stock** | Stockage & picking viticole : références, entrées/sorties, espaces, relevés, compta matière, QR codes | personnalisable |
+| **Espaces communs** | Chat interne, assistant Aura, dépôt de documents, liens & outils | logo du Desk |
+
+Fini les connexions séparées : plus de login propre à Planet'Projects ou Planet'Stock. Le compte Planet'Desk ouvre les deux, avec les droits définis par l'admin (Administration → « Gérer les accès » : modules visibles, projets accordés, rôle et onglets Planet'Stock).
 
 ## Fonctionnalités
 
@@ -63,10 +73,10 @@ npm run dev        # http://localhost:5173 — mode démo si Supabase n'est pas 
    - `CLOUDFLARE_ACCOUNT_ID`
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
-3. Poussez sur la branche `main` : le workflow [`deploy.yml`](.github/workflows/deploy.yml) construit l'application et la déploie sur le projet Pages `planet-aura-organisation` (créé automatiquement au premier déploiement).
-4. L'application est servie sur `https://planet-aura-organisation.pages.dev` (domaine personnalisé possible dans le dashboard Cloudflare Pages).
+3. Poussez sur la branche par défaut (ou lancez le workflow manuellement) : [`deploy.yml`](.github/workflows/deploy.yml) construit l'application et déploie le worker **`planet-desk`** (créé automatiquement au premier déploiement).
+4. L'application est servie sur `https://planet-desk.<sous-domaine-compte>.workers.dev` — le sous-domaine exact s'affiche à la fin du déploiement et dans le dashboard Cloudflare (Workers & Pages → planet-desk). Un domaine personnalisé (ex. `desk.planetaura.org`) peut y être ajouté.
 
-Déploiement manuel possible : `npm run build && npx wrangler pages deploy dist --project-name=planet-aura-organisation`.
+Déploiement manuel possible : `npm run build && npx wrangler deploy`.
 
 ### Un seul projet Supabase pour tout
 

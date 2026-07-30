@@ -37,8 +37,8 @@ export default function Login() {
         <div className="flex items-center gap-3 mb-6">
           <img src={logoUrl} alt="Planet Aura" className="h-12 w-12 rounded-full object-contain" />
           <div>
-            <h1 className="text-xl font-extrabold text-aura-950">Planet’Projects</h1>
-            <p className="text-xs text-aura-700">Le pilotage des projets de Planet Aura</p>
+            <h1 className="text-xl font-extrabold text-aura-950">Planet’Desk</h1>
+            <p className="text-xs text-aura-700">Le bureau numérique de Planet Aura — projets, stock, chat & documents</p>
           </div>
         </div>
 

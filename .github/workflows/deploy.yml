@@ -2,7 +2,7 @@ name: Déploiement Cloudflare Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/planet-aura-app-0mb0ux]
   workflow_dispatch:
 
 jobs:

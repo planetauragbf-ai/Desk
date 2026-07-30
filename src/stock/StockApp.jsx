@@ -2001,17 +2001,29 @@ const handleLogout=()=>{if(currentUser&&d){const nd={...d,auditLog:[...(d.auditL
 useEffect(()=>{
   if(ld2||!d||currentUser||!session)return;
   const e=(session.email||"").toLowerCase();
+  const acc=session.stockAccess;
+  const fullPerms={entrees:true,sorties:true,references:true,espaces:true,facturation:true,compta:true,grille:true};
+  // 1. Droits définis par l'administrateur dans Planet'Desk (prioritaires)
+  if(acc?.role==="admin"){handleLogin({id:"DESK-"+e,nom:session.fullName||e,email:session.email,role:"admin",permissions:fullPerms,type:"internal"});return;}
+  if(acc?.role==="logisticien"){const pp=acc.permissions||{};handleLogin({id:"DESK-"+e,nom:session.fullName||e,email:session.email,role:"logisticien",permissions:{...pp,references:!!pp.entrees},type:"internal"});return;}
+  if(acc?.role==="adherent"){
+    const adh=(d.adherents||[]).find(x=>(acc.adherent_id&&x.id===acc.adherent_id)||x.email?.toLowerCase()===e);
+    if(adh){handleLogin({id:adh.id,nom:adh.name,email:adh.email||session.email,role:"adherent",adherentId:adh.id,type:"adherent"});return;}
+  }
+  // 2. Repli : correspondance par email avec les comptes historiques du stock
   const user=(d.users||[]).find(u=>u.email.toLowerCase()===e);
   if(user){handleLogin({...user,type:"internal"});return;}
   const adh=(d.adherents||[]).find(x=>x.email?.toLowerCase()===e&&x.stockageActif);
   if(adh){handleLogin({id:adh.id,nom:adh.name,email:adh.email,role:"adherent",adherentId:adh.id,type:"adherent"});return;}
-  if(session.isAdmin){handleLogin({id:"ORG-ADMIN",nom:session.fullName||"Admin",email:session.email,role:"admin",permissions:{entrees:true,sorties:true,references:true,espaces:true,facturation:true,compta:true,grille:true},type:"internal"});}
+  // 3. Les administrateurs du Desk sont administrateurs du stock
+  if(session.isAdmin){handleLogin({id:"DESK-"+e,nom:session.fullName||"Admin",email:session.email,role:"admin",permissions:fullPerms,type:"internal"});}
 // eslint-disable-next-line react-hooks/exhaustive-deps
 },[ld2,d,currentUser,session]);
 
 if(ld2||!d)return <div style={{fontFamily:FN,background:P.bg,color:P.tx,height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{textAlign:"center"}}><img src={LOGO} width={60} height={60} style={{borderRadius:"50%",marginBottom:10}}/><div style={{fontSize:13,color:P.tm}}>Chargement...</div></div></div>;
 
 // Not logged in → show login
+if(!currentUser&&session)return <div style={{fontFamily:FN,background:P.bg,minHeight:"60vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><div style={{background:P.sf,borderRadius:16,padding:32,maxWidth:420,textAlign:"center",border:`1px solid ${P.bd}`}}><div style={{fontSize:32,marginBottom:8}}>🔒</div><div style={{fontWeight:700,color:P.tx,marginBottom:6}}>Accès Planet'Stock non configuré</div><div style={{fontSize:13,color:P.tm,lineHeight:1.5}}>Votre compte Planet'Desk ({session.email}) n'est relié à aucun profil du stock. Demandez à votre administrateur de définir vos droits : Administration → votre compte → « Accès Planet'Stock ».</div></div></div>;
 if(!currentUser)return <LoginScreen data={d} onLogin={handleLogin} skipAuth={!!session} onRefresh={async()=>{const v=await fetchCloudState();if(v){sR(v);return v;}return null;}}/>;
 
 // Arrivée par QR code → fiche technique plein écran

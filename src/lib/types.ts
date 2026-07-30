@@ -11,6 +11,22 @@ export interface Instance {
   created_at: string
 }
 
+/** Droits d'un salarié sur l'application Planet'Stock, définis par l'admin */
+export interface StockAccess {
+  role: 'admin' | 'logisticien' | 'adherent'
+  /** Onglets ouverts pour un logisticien */
+  permissions?: {
+    entrees?: boolean
+    sorties?: boolean
+    espaces?: boolean
+    facturation?: boolean
+    compta?: boolean
+    grille?: boolean
+  }
+  /** Pour un adhérent : identifiant de sa fiche (ADH001…) */
+  adherent_id?: string | null
+}
+
 export interface Profile {
   id: string
   full_name: string
@@ -19,6 +35,8 @@ export interface Profile {
   instance_id: string | null
   /** Modules accessibles ; null = tous les modules */
   modules: string[] | null
+  /** Accès Planet'Stock défini par l'admin ; null = correspondance email / admin */
+  stock_access?: StockAccess | null
   created_at: string
 }
 

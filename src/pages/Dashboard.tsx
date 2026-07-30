@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { computeStats, isCritical } from '../lib/compute'
-import { visibleObjectives } from '../lib/permissions'
+import { canAccessModule, visibleObjectives } from '../lib/permissions'
+import { useBranding } from '../context/BrandingContext'
 import { notify } from '../lib/notify'
 import { formatDate, isPast, profileName } from '../lib/format'
 import { update } from '../lib/data'
@@ -11,6 +12,7 @@ import { Card, StatTile, EmptyState } from '../components/ui'
 
 export default function Dashboard() {
   const { profile } = useAuth()
+  const { logos } = useBranding()
   const navigate = useNavigate()
   const { rows: allObjectives } = useTable('objectives')
   const { rows: tasks, refresh: refreshTasks } = useTable('tasks')
@@ -94,6 +96,40 @@ export default function Dashboard() {
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-extrabold">Tableau de bord</h1>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {[
+          {
+            app: 'projects' as const,
+            to: '/objectifs',
+            module: 'objectifs' as const,
+            title: "Planet’Projects",
+            desc: 'Pilotage : objectifs, plans d’actions, process et décisions.',
+          },
+          {
+            app: 'stock' as const,
+            to: '/stock',
+            module: 'stock' as const,
+            title: "Planet’Stock",
+            desc: 'Stockage & picking : références, entrées/sorties, espaces, relevés.',
+          },
+        ]
+          .filter((t) => canAccessModule(profile, t.module))
+          .map((t) => (
+            <Link
+              key={t.app}
+              to={t.to}
+              className="card flex items-center gap-4 hover:shadow-lg transition-shadow !p-4"
+            >
+              <img src={logos[t.app]} alt={t.title} className="h-12 w-12 rounded-full border border-aura-100 bg-white object-contain" />
+              <div className="min-w-0">
+                <div className="text-sm font-extrabold text-aura-950">{t.title}</div>
+                <div className="text-xs text-aura-700/80 mt-0.5">{t.desc}</div>
+              </div>
+              <span className="ml-auto text-aura-700/50 text-lg">→</span>
+            </Link>
+          ))}
+      </div>
 
       <Card title="Que souhaitez-vous faire ?">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

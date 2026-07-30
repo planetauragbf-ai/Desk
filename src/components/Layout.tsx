@@ -5,25 +5,75 @@ import { canAccessModule, type ModuleKey } from '../lib/permissions'
 import { useBranding } from '../context/BrandingContext'
 import { Avatar } from './ui'
 
-const NAV: { to: string; label: string; icon: string; module?: ModuleKey }[] = [
+interface NavItem {
+  to: string
+  label: string
+  icon: string
+  module?: ModuleKey
+}
+
+// Planet'Desk : le portail (espaces communs) héberge deux applications,
+// chacune avec son logo — Planet'Projects (pilotage) et Planet'Stock
+// (stockage & picking).
+const DESK_NAV: NavItem[] = [
   { to: '/tableau-de-bord', label: 'Tableau de bord', icon: '◧' },
   { to: '/chat', label: 'Chat interne', icon: '💬', module: 'chat' },
   { to: '/assistant', label: 'Assistant Aura', icon: '✦', module: 'assistant' },
-  { to: '/objectifs', label: 'Objectifs', icon: '◎', module: 'objectifs' },
-  { to: '/pilotage', label: 'Pilotage', icon: '⇗', module: 'pilotage' },
-  { to: '/workflows', label: 'Workflows', icon: '⟳', module: 'workflows' },
-  { to: '/notes', label: 'Notes', icon: '✎', module: 'notes' },
   { to: '/documents', label: 'Documents', icon: '▤', module: 'documents' },
   { to: '/liens', label: 'Liens & outils', icon: '⌘', module: 'liens' },
-  { to: '/stock', label: "Planet'Stock", icon: '🍷', module: 'stock' },
+]
+
+const PROJECTS_NAV: NavItem[] = [
+  { to: '/objectifs', label: 'Objectifs', icon: '◎', module: 'objectifs' },
+  { to: '/pilotage', label: 'Pilotage', icon: '⇗', module: 'pilotage' },
+  { to: '/workflows', label: 'Process', icon: '⟳', module: 'workflows' },
+  { to: '/notes', label: 'Notes', icon: '✎', module: 'notes' },
   { to: '/organisation', label: 'Organisation', icon: '⌂', module: 'organisation' },
 ]
 
+const STOCK_NAV: NavItem[] = [
+  { to: '/stock', label: 'Stockage & picking', icon: '📦', module: 'stock' },
+]
+
+function NavItems({ items }: { items: NavItem[] }) {
+  return (
+    <>
+      {items.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          className={({ isActive }) =>
+            `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              isActive ? 'bg-white/15 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'
+            }`
+          }
+        >
+          <span className="text-base w-5 text-center">{item.icon}</span>
+          {item.label}
+        </NavLink>
+      ))}
+    </>
+  )
+}
+
+function SectionHeader({ logo, label }: { logo?: string; label: string }) {
+  return (
+    <div className="flex items-center gap-2 px-3 pt-4 pb-1.5">
+      {logo && <img src={logo} alt="" className="h-5 w-5 rounded-full bg-white/90 p-px object-contain" />}
+      <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">{label}</span>
+    </div>
+  )
+}
+
 export default function Layout() {
   const { profile, signOut } = useAuth()
-  const { logoUrl } = useBranding()
+  const { logos } = useBranding()
   const { pathname } = useLocation()
-  const items = NAV.filter((item) => !item.module || canAccessModule(profile, item.module))
+  const visible = (items: NavItem[]) =>
+    items.filter((item) => !item.module || canAccessModule(profile, item.module))
+  const deskItems = visible(DESK_NAV)
+  const projectItems = visible(PROJECTS_NAV)
+  const stockItems = visible(STOCK_NAV)
   // Planet'Stock embarque sa propre mise en page : pleine largeur, sans marges.
   const fullBleed = pathname.startsWith('/stock')
 
@@ -32,40 +82,45 @@ export default function Layout() {
       <aside className="w-60 shrink-0 bg-aura-950 text-white flex flex-col">
         <div className="px-5 py-6">
           <div className="flex items-center gap-2.5">
-            <img src={logoUrl} alt="Planet Aura" className="h-10 w-10 rounded-full bg-white/90 p-0.5 object-contain" />
+            <img src={logos.desk} alt="Planet Aura" className="h-10 w-10 rounded-full bg-white/90 p-0.5 object-contain" />
             <div>
-              <div className="font-extrabold leading-tight">Planet’Projects</div>
+              <div className="font-extrabold leading-tight">Planet’Desk</div>
               <div className="text-[11px] text-white/60 leading-tight">Planet Aura</div>
             </div>
           </div>
         </div>
-        <nav className="flex-1 px-3 space-y-1">
-          {items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive ? 'bg-white/15 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'
-                }`
-              }
-            >
-              <span className="text-base w-5 text-center">{item.icon}</span>
-              {item.label}
-            </NavLink>
-          ))}
+        <nav className="flex-1 px-3 space-y-1 overflow-y-auto pb-4">
+          <NavItems items={deskItems} />
+
+          {projectItems.length > 0 && (
+            <>
+              <SectionHeader logo={logos.projects} label="Planet’Projects" />
+              <NavItems items={projectItems} />
+            </>
+          )}
+
+          {stockItems.length > 0 && (
+            <>
+              <SectionHeader logo={logos.stock} label="Planet’Stock" />
+              <NavItems items={stockItems} />
+            </>
+          )}
+
           {profile?.role === 'admin' && (
-            <NavLink
-              to="/administration"
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive ? 'bg-white/15 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'
-                }`
-              }
-            >
-              <span className="text-base w-5 text-center">⚙</span>
-              Administration
-            </NavLink>
+            <>
+              <SectionHeader label="Gestion" />
+              <NavLink
+                to="/administration"
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    isActive ? 'bg-white/15 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'
+                  }`
+                }
+              >
+                <span className="text-base w-5 text-center">⚙</span>
+                Administration
+              </NavLink>
+            </>
           )}
         </nav>
         <div className="px-5 py-4 border-t border-white/10">
