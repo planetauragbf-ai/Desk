@@ -235,8 +235,9 @@ export default function Layout() {
   const [collapsed, setCollapsed] = usePersistedBool('desk-nav-fermee', false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Sur téléphone, le menu (en haut) se referme après chaque navigation.
+  // À chaque navigation : retour en haut de page, et fermeture du menu mobile.
   useEffect(() => {
+    window.scrollTo(0, 0)
     setMobileOpen(false)
   }, [pathname, search])
 

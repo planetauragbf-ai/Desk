@@ -21,7 +21,7 @@ export default function AssistantPage() {
     },
   ])
   const [draft, setDraft] = useState('')
-  const endRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
 
   const { rows: profiles } = useTable('profiles')
   const { rows: objectives } = useTable('objectives')
@@ -40,8 +40,10 @@ export default function AssistantPage() {
     [profile, profiles, objectives, tasks, notes, documents, decisions, workflows, links, channels, messages, leaves],
   )
 
+  // Défilement du fil de conversation uniquement (jamais de la page entière).
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = listRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [turns.length])
 
   function ask(question: string) {
@@ -67,7 +69,7 @@ export default function AssistantPage() {
       </div>
 
       <Card className="flex flex-col min-h-[60vh]">
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1" style={{ maxHeight: '58vh' }}>
+        <div ref={listRef} className="flex-1 overflow-y-auto space-y-4 pr-1" style={{ maxHeight: '58vh' }}>
           {turns.map((t, i) => (
             <div key={i} className={`flex ${t.who === 'moi' ? 'justify-end' : 'justify-start'}`}>
               <div
@@ -106,7 +108,6 @@ export default function AssistantPage() {
               </div>
             </div>
           ))}
-          <div ref={endRef} />
         </div>
 
         <div className="mt-3 border-t border-aura-100 pt-3 space-y-2.5">
