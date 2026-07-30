@@ -49,7 +49,7 @@ function seed(): Db {
 
   const db: Db = {
     instances: [
-      { id: inst.direction, name: 'Direction Planet AURA', parent_id: null, level: 1, created_at: now },
+      { id: inst.direction, name: 'Direction Planet Aura', parent_id: null, level: 1, created_at: now },
       { id: inst.communication, name: 'Communication & Communauté', parent_id: inst.direction, level: 2, created_at: now },
       { id: inst.evenements, name: 'Événements', parent_id: inst.direction, level: 2, created_at: now },
       { id: inst.partenariats, name: 'Partenariats & Financements', parent_id: inst.direction, level: 2, created_at: now },
@@ -65,14 +65,14 @@ function seed(): Db {
     objectives: [
       {
         id: obj.cap,
-        title: '[CAP 2027] Faire de Planet AURA une organisation de référence',
+        title: '[CAP 2027] Faire de Planet Aura une organisation de référence',
         expected_result: "Structurer l'organisation, doubler la communauté active et pérenniser le financement d'ici fin 2027.",
         parent_id: null, instance_id: inst.direction, status: 'en_cours', priority: 'critique',
         start_date: day(-60), due_date: day(500), owner_id: users.admin, created_by: users.admin, created_at: iso(-60), closed_at: null,
       },
       {
         id: obj.site,
-        title: 'Lancer le nouveau site web de Planet AURA',
+        title: 'Lancer le nouveau site web de Planet Aura',
         expected_result: "Site vitrine en ligne avec présentation de l'organisation, agenda des événements et formulaire d'adhésion.",
         parent_id: obj.cap, instance_id: inst.communication, status: 'en_cours', priority: 'haute',
         start_date: day(-20), due_date: day(45), owner_id: users.lea, created_by: users.admin, created_at: iso(-20), closed_at: null,
@@ -111,7 +111,7 @@ function seed(): Db {
       { id: uid(), objective_id: obj.finance, title: 'Lister les partenaires potentiels', description: '', status: 'a_faire', priority: 'haute', due_date: day(10), assignee_id: users.sofia, workflow_group: null, estimated_hours: 5, spent_hours: null, created_at: iso(-4), completed_at: null },
     ],
     workflow_templates: [
-      { id: wf.event, name: "Organisation d'un événement", description: "Processus standard de préparation d'un événement communautaire Planet AURA.", owner_id: users.marco, status: 'utilisee', created_at: iso(-30), updated_at: iso(-9) },
+      { id: wf.event, name: "Organisation d'un événement", description: "Processus standard de préparation d'un événement communautaire Planet Aura.", owner_id: users.marco, status: 'utilisee', created_at: iso(-30), updated_at: iso(-9) },
     ],
     workflow_steps: [
       { id: steps.cadrage, template_id: wf.event, position: 1, title: 'Cadrage' },
@@ -132,7 +132,7 @@ function seed(): Db {
     ],
     documents: [
       { id: uid(), name: 'Cahier des charges — site web v1.pdf', folder: 'Projets', storage_path: null, url: null, objective_id: obj.site, task_id: null, author_id: users.lea, created_at: iso(-8) },
-      { id: uid(), name: 'Statuts Planet AURA.pdf', folder: 'Directives', storage_path: null, url: null, objective_id: null, task_id: null, author_id: users.admin, created_at: iso(-60) },
+      { id: uid(), name: 'Statuts Planet Aura.pdf', folder: 'Directives', storage_path: null, url: null, objective_id: null, task_id: null, author_id: users.admin, created_at: iso(-60) },
     ],
     decisions: [
       { id: uid(), objective_id: obj.site, title: 'Choix du CMS ou développement sur mesure', context: "Comparer coût, autonomie de l'équipe et délais de mise en ligne.", status: 'en_instruction', outcome: '', decided_by: null, decided_at: null, created_at: iso(-10) },

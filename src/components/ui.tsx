@@ -136,11 +136,11 @@ export function GaugeRing({ value, size = 56, label }: { value: number; size?: n
   const v = Math.max(0, Math.min(100, Math.round(value)))
   const r = (size - 8) / 2
   const c = 2 * Math.PI * r
-  const color = v >= 70 ? '#10b981' : v >= 40 ? '#f59e0b' : '#e15750'
+  const color = v >= 70 ? '#059669' : v >= 40 ? '#f59e0b' : '#dc2626'
   return (
     <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e7f0f8" strokeWidth="6" />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth="6" />
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="6"
           strokeDasharray={`${(v / 100) * c} ${c}`} strokeLinecap="round"

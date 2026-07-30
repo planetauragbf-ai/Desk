@@ -25,10 +25,10 @@ export default function Layout() {
       <aside className="w-60 shrink-0 bg-aura-950 text-white flex flex-col">
         <div className="px-5 py-6">
           <div className="flex items-center gap-2.5">
-            <img src={logoUrl} alt="Planet AURA" className="h-10 w-10 rounded-full bg-white/90 p-0.5 object-contain" />
+            <img src={logoUrl} alt="Planet Aura" className="h-10 w-10 rounded-full bg-white/90 p-0.5 object-contain" />
             <div>
-              <div className="font-extrabold leading-tight">Planet'Projects</div>
-              <div className="text-[11px] text-white/60 leading-tight">Planet AURA</div>
+              <div className="font-extrabold leading-tight">Planet’Projects</div>
+              <div className="text-[11px] text-white/60 leading-tight">Planet Aura</div>
             </div>
           </div>
         </div>

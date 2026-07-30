@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
-import { computeStats } from '../lib/compute'
+import { computeStats, descendantsOf } from '../lib/compute'
 import { visibleObjectives } from '../lib/permissions'
 import { formatDate, isPast, profileName, TASK_STATUS_LABELS } from '../lib/format'
 import { insert, remove, update } from '../lib/data'
@@ -74,6 +74,21 @@ export default function ObjectiveDetail() {
     refreshObjectives()
   }
 
+  async function deleteObjective() {
+    const scope = [objective!, ...descendantsOf(objectives, objective!.id)]
+    const label = scope.length > 1 ? `ses ${scope.length - 1} sous-objectif(s) et ` : ''
+    if (!confirm(`Supprimer définitivement « ${objective!.title} », ${label}toutes les données liées (tâches, notes, documents, décisions, indicateurs) ?`)) return
+    const ids = new Set(scope.map((o) => o.id))
+    for (const t of allTasks.filter((t) => t.objective_id && ids.has(t.objective_id))) await remove('tasks', t.id)
+    for (const n of notes.filter((n) => n.objective_id && ids.has(n.objective_id))) await remove('notes', n.id)
+    for (const d of documents.filter((d) => d.objective_id && ids.has(d.objective_id))) await remove('documents', d.id)
+    for (const d of decisions.filter((d) => d.objective_id && ids.has(d.objective_id))) await remove('decisions', d.id)
+    for (const i of indicators.filter((i) => ids.has(i.objective_id))) await remove('indicators', i.id)
+    for (const m of membersRows.filter((m) => ids.has(m.objective_id))) await remove('objective_members', m.id)
+    for (const o of [...scope].reverse()) await remove('objectives', o.id)
+    navigate('/objectifs')
+  }
+
   return (
     <div className="space-y-5">
       {/* En-tête */}
@@ -87,10 +102,19 @@ export default function ObjectiveDetail() {
             >←</button>
             <h1 className="text-lg font-bold truncate">{objective.title}</h1>
           </div>
-          <label className="flex items-center gap-2 text-xs whitespace-nowrap cursor-pointer">
-            Clore l'objectif
-            <input type="checkbox" checked={objective.status === 'termine'} onChange={toggleClose} />
-          </label>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-xs whitespace-nowrap cursor-pointer">
+              Clore l'objectif
+              <input type="checkbox" checked={objective.status === 'termine'} onChange={toggleClose} />
+            </label>
+            {profile?.role === 'admin' && (
+              <button
+                onClick={deleteObjective}
+                className="text-xs text-white/70 hover:text-coral-500 whitespace-nowrap"
+                title="Supprimer définitivement cet objectif"
+              >🗑 Supprimer</button>
+            )}
+          </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-white/80">
           <Badge value={objective.status} kind="objective" />

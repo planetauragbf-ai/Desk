@@ -1,22 +1,22 @@
 -- ============================================================
--- Planet AURA — Données d'exemple (optionnel)
+-- Planet Aura — Données d'exemple (optionnel)
 -- À exécuter APRÈS 0001_init.sql et après avoir créé au moins
 -- un utilisateur (l'objectif d'exemple n'a pas de référent).
 -- ============================================================
 
 insert into public.instances (id, name, parent_id, level) values
-  ('11111111-1111-1111-1111-111111111101', 'Direction Planet AURA', null, 1),
+  ('11111111-1111-1111-1111-111111111101', 'Direction Planet Aura', null, 1),
   ('11111111-1111-1111-1111-111111111102', 'Communication & Communauté', '11111111-1111-1111-1111-111111111101', 2),
   ('11111111-1111-1111-1111-111111111103', 'Événements', '11111111-1111-1111-1111-111111111101', 2),
   ('11111111-1111-1111-1111-111111111104', 'Partenariats & Financements', '11111111-1111-1111-1111-111111111101', 2);
 
 insert into public.objectives (id, title, expected_result, parent_id, instance_id, status, priority, start_date, due_date) values
   ('22222222-2222-2222-2222-222222222201',
-   '[CAP 2027] Faire de Planet AURA une organisation de référence',
+   '[CAP 2027] Faire de Planet Aura une organisation de référence',
    'Structurer l''organisation, doubler la communauté active et pérenniser le financement d''ici fin 2027.',
    null, '11111111-1111-1111-1111-111111111101', 'en_cours', 'critique', current_date - 30, current_date + 500),
   ('22222222-2222-2222-2222-222222222202',
-   'Lancer le nouveau site web de Planet AURA',
+   'Lancer le nouveau site web de Planet Aura',
    'Site vitrine en ligne avec présentation, agenda des événements et formulaire d''adhésion.',
    '22222222-2222-2222-2222-222222222201', '11111111-1111-1111-1111-111111111102', 'en_cours', 'haute', current_date - 15, current_date + 60),
   ('22222222-2222-2222-2222-222222222203',

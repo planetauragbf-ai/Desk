@@ -238,22 +238,22 @@ function StrategyMap({ objectives, statsById }: {
               <line
                 key={i}
                 x1={e.from.x} y1={e.from.y + 24} x2={e.to.x} y2={e.to.y - 24}
-                stroke={critical ? '#e15750' : '#9db8c9'} strokeWidth={critical ? 2 : 1.2}
+                stroke={critical ? '#dc2626' : '#d0d5dd'} strokeWidth={critical ? 2 : 1.2}
               />
             )
           })}
           {nodes.map((n) => {
             const s = statsById.get(n.obj.id)
             const p = s?.probability ?? 0
-            const color = n.obj.status === 'termine' ? '#10b981' : p >= 70 ? '#10b981' : p >= 40 ? '#f59e0b' : '#e15750'
+            const color = n.obj.status === 'termine' ? '#059669' : p >= 70 ? '#059669' : p >= 40 ? '#f59e0b' : '#dc2626'
             return (
               <g key={n.obj.id}>
                 <a href={`/objectifs/${n.obj.id}`}>
                   <circle cx={n.x} cy={n.y} r={24} fill="white" stroke={color} strokeWidth={4} />
-                  <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize="11" fontWeight="800" fill="#0b2e44">
+                  <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize="11" fontWeight="800" fill="#0f172a">
                     {p}%
                   </text>
-                  <text x={n.x} y={n.y + 42} textAnchor="middle" fontSize="10" fill="#1d4e6b">
+                  <text x={n.x} y={n.y + 42} textAnchor="middle" fontSize="10" fill="#3f4c60">
                     {n.obj.title.length > 22 ? n.obj.title.slice(0, 21) + '…' : n.obj.title}
                   </text>
                 </a>

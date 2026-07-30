@@ -1,6 +1,6 @@
-# Planet AURA · Organisation
+# Planet Aura · Organisation
 
-Application de **pilotage organisationnel** pour Planet AURA, inspirée de la méthodologie Eidō Organisations : posez vos objectifs, gérez vos projets, suivez vos plans d'actions, partagez l'information.
+Application de **pilotage organisationnel** pour Planet Aura, inspirée de la méthodologie Eidō Organisations : posez vos objectifs, gérez vos projets, suivez vos plans d'actions, partagez l'information.
 
 ## Fonctionnalités
 
@@ -78,7 +78,7 @@ src/
   lib/
     types.ts                 # types des entités (objectifs, tâches, décisions…)
     supabase.ts              # client Supabase (si configuré)
-    localdb.ts               # base locale du mode démo (localStorage, seed Planet AURA)
+    localdb.ts               # base locale du mode démo (localStorage, seed Planet Aura)
     data.ts                  # couche d'accès unifiée Supabase / démo
     compute.ts               # consolidation : complétion, probabilité, indices maîtrise/réalité
   context/AuthContext.tsx    # session (Supabase Auth ou démo)
