@@ -11,6 +11,7 @@ export const MODULES = [
   { key: 'notes', label: 'Notes' },
   { key: 'documents', label: 'Documents' },
   { key: 'liens', label: 'Liens & outils' },
+  { key: 'stock', label: "Planet'Stock (stockage & picking)" },
   { key: 'organisation', label: 'Organisation' },
 ] as const
 

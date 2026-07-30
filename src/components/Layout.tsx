@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { demoMode } from '../lib/data'
 import { canAccessModule, type ModuleKey } from '../lib/permissions'
@@ -15,13 +15,17 @@ const NAV: { to: string; label: string; icon: string; module?: ModuleKey }[] = [
   { to: '/notes', label: 'Notes', icon: '✎', module: 'notes' },
   { to: '/documents', label: 'Documents', icon: '▤', module: 'documents' },
   { to: '/liens', label: 'Liens & outils', icon: '⌘', module: 'liens' },
+  { to: '/stock', label: "Planet'Stock", icon: '🍷', module: 'stock' },
   { to: '/organisation', label: 'Organisation', icon: '⌂', module: 'organisation' },
 ]
 
 export default function Layout() {
   const { profile, signOut } = useAuth()
   const { logoUrl } = useBranding()
+  const { pathname } = useLocation()
   const items = NAV.filter((item) => !item.module || canAccessModule(profile, item.module))
+  // Planet'Stock embarque sa propre mise en page : pleine largeur, sans marges.
+  const fullBleed = pathname.startsWith('/stock')
 
   return (
     <div className="min-h-screen flex">
@@ -85,7 +89,7 @@ export default function Layout() {
             Mode démo — données stockées dans ce navigateur. Configurez Supabase (voir README) pour un espace partagé.
           </div>
         )}
-        <main className="p-6 max-w-6xl mx-auto">
+        <main className={fullBleed ? '' : 'p-6 max-w-6xl mx-auto'}>
           <Outlet />
         </main>
       </div>

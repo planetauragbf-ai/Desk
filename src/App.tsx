@@ -17,6 +17,7 @@ import SetPassword from './pages/SetPassword'
 import ChatPage from './pages/ChatPage'
 import AssistantPage from './pages/AssistantPage'
 import LinksPage from './pages/LinksPage'
+import StockPage from './pages/StockPage'
 
 function Guard({ module, children }: { module: ModuleKey; children: ReactNode }) {
   const { profile } = useAuth()
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/chat" element={<Guard module="chat"><ChatPage /></Guard>} />
         <Route path="/assistant" element={<Guard module="assistant"><AssistantPage /></Guard>} />
         <Route path="/liens" element={<Guard module="liens"><LinksPage /></Guard>} />
+        <Route path="/stock/*" element={<Guard module="stock"><StockPage /></Guard>} />
         <Route path="/objectifs" element={<Guard module="objectifs"><Objectives /></Guard>} />
         <Route path="/objectifs/:id" element={<Guard module="objectifs"><ObjectiveDetail /></Guard>} />
         <Route path="/pilotage" element={<Guard module="pilotage"><Pilotage /></Guard>} />
