@@ -43,6 +43,7 @@ export default function CalendarPage() {
     return new Date(d.getFullYear(), d.getMonth(), 1)
   })
   const [showNew, setShowNew] = useState(false)
+  const [editCell, setEditCell] = useState<{ profileId: string; date: string } | null>(null)
 
   const { rows: leaves, refresh } = useTable('leaves', undefined, { column: 'created_at', ascending: false })
   const { rows: profiles } = useTable('profiles', undefined, { column: 'full_name', ascending: true })
@@ -76,7 +77,9 @@ export default function CalendarPage() {
   const pendingAdmin = leaves.filter((l) => l.status === 'en_attente')
   const pendingCompta = leaves.filter((l) => l.status === 'validee_admin')
 
-  // Soldes CP de l'année en cours (jours ouvrés approximés : lun-ven).
+  // Admins et service compta ont la main sur le planning (clic sur une case).
+  const canEditPlanning = isAdmin || isCompta
+
   const workingDays = (l: Leave) => {
     let n = 0
     const d = new Date(l.start_date)
@@ -87,11 +90,62 @@ export default function CalendarPage() {
     }
     return n
   }
-  const year = new Date().getFullYear()
-  const cpTaken = (profileId: string) =>
-    leaves
-      .filter((l) => l.profile_id === profileId && l.type === 'conge' && l.status === 'validee' && l.start_date.startsWith(String(year)))
-      .reduce((s, l) => s + workingDays(l), 0)
+
+  const shiftDay = (iso: string, delta: number) => {
+    const d = new Date(iso)
+    d.setDate(d.getDate() + delta)
+    return toIso(d)
+  }
+
+  /** Retire un jour d'une absence existante (suppression, troncature ou découpe). */
+  async function removeDayFromLeave(l: Leave, iso: string) {
+    if (l.start_date === l.end_date) {
+      await remove('leaves', l.id)
+    } else if (iso === l.start_date) {
+      await update('leaves', l.id, { start_date: shiftDay(iso, 1) })
+    } else if (iso === l.end_date) {
+      await update('leaves', l.id, { end_date: shiftDay(iso, -1) })
+    } else {
+      await update('leaves', l.id, { end_date: shiftDay(iso, -1) })
+      await insert('leaves', {
+        profile_id: l.profile_id,
+        type: l.type,
+        start_date: shiftDay(iso, 1),
+        end_date: l.end_date,
+        reason: l.reason,
+        status: l.status,
+        admin_by: l.admin_by,
+        admin_at: l.admin_at,
+        compta_by: l.compta_by,
+        compta_at: l.compta_at,
+      })
+    }
+  }
+
+  /** Admin/compta : fixe la case (présence ou code d'absence) directement. */
+  async function setCell(profileId: string, iso: string, type: LeaveType | 'presence') {
+    const existing = leaves.filter(
+      (l) => l.profile_id === profileId && l.status !== 'refusee' && l.start_date <= iso && l.end_date >= iso,
+    )
+    for (const l of existing) await removeDayFromLeave(l, iso)
+    if (type !== 'presence') {
+      const now = new Date().toISOString()
+      await insert('leaves', {
+        profile_id: profileId,
+        type,
+        start_date: iso,
+        end_date: iso,
+        reason: 'Saisie planning',
+        status: 'validee',
+        admin_by: profile?.id ?? null,
+        admin_at: now,
+        compta_by: profile?.id ?? null,
+        compta_at: now,
+      })
+    }
+    setEditCell(null)
+    refresh()
+  }
 
   async function requestLeave(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -203,6 +257,10 @@ export default function CalendarPage() {
         }
       >
         <div className="flex flex-wrap gap-2 mb-3 text-[11px]">
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block w-4 h-4 rounded text-[8px] font-bold text-center leading-4 bg-aura-100 text-aura-700">P</span>
+            Présence
+          </span>
           {Object.values(TYPES).map((t) => (
             <span key={t.code} className="inline-flex items-center gap-1">
               <span className={`inline-block w-4 h-4 rounded text-[8px] font-bold text-center leading-4 ${t.color}`}>{t.code[0]}</span>
@@ -210,6 +268,7 @@ export default function CalendarPage() {
             </span>
           ))}
           <span className="text-aura-700/60">· transparent = en attente de validation</span>
+          {canEditPlanning && <span className="text-accent-500 font-semibold">· cliquez sur une case pour la modifier</span>}
         </div>
         <div className="overflow-x-auto">
           <table className="border-collapse">
@@ -236,15 +295,23 @@ export default function CalendarPage() {
                     const l = cellLeave(p.id, d)
                     const t = l ? TYPES[l.type] : null
                     return (
-                      <td key={d.getDate()} className={`border border-aura-100 p-0.5 text-center ${weekend ? 'bg-aura-50' : ''}`}>
-                        {t && (
+                      <td
+                        key={d.getDate()}
+                        onClick={canEditPlanning && !weekend ? () => setEditCell({ profileId: p.id, date: toIso(d) }) : undefined}
+                        className={`border border-aura-100 p-0.5 text-center ${weekend ? 'bg-aura-50' : ''} ${
+                          canEditPlanning && !weekend ? 'cursor-pointer hover:bg-accent-500/10' : ''
+                        }`}
+                      >
+                        {t ? (
                           <span
                             title={`${t.label} — ${STATUS_LABELS[l!.status]}`}
                             className={`block rounded text-[9px] font-bold py-0.5 ${t.color} ${l!.status !== 'validee' ? 'opacity-40' : ''}`}
                           >
                             {t.code}
                           </span>
-                        )}
+                        ) : !weekend ? (
+                          <span className="block rounded text-[9px] font-semibold py-0.5 text-aura-700/40">P</span>
+                        ) : null}
                       </td>
                     )
                   })}
@@ -255,7 +322,7 @@ export default function CalendarPage() {
         </div>
       </Card>
 
-      <div className="grid lg:grid-cols-2 gap-5">
+      <div className="grid lg:grid-cols-1 gap-5">
         <Card title="Mes demandes">
           {myLeaves.length === 0 ? (
             <EmptyState>Aucune demande. Utilisez « + Faire une demande ».</EmptyState>
@@ -283,34 +350,39 @@ export default function CalendarPage() {
             </ul>
           )}
         </Card>
-
-        <Card title={`Soldes de congés ${year}`}>
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className="table-head rounded-l-lg text-left">Salarié</th>
-                <th className="table-head text-right">Droits</th>
-                <th className="table-head text-right">Pris</th>
-                <th className="table-head rounded-r-lg text-right">Solde</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(isAdmin || isCompta ? activeProfiles : activeProfiles.filter((p) => p.id === profile?.id)).map((p) => {
-                const taken = cpTaken(p.id)
-                const droits = p.cp_droits ?? 25
-                return (
-                  <tr key={p.id}>
-                    <td className="table-cell text-xs font-semibold">{p.full_name}</td>
-                    <td className="table-cell text-right">{droits}</td>
-                    <td className="table-cell text-right">{taken}</td>
-                    <td className={`table-cell text-right font-bold ${droits - taken < 0 ? 'text-coral-600' : ''}`}>{droits - taken}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </Card>
       </div>
+
+      {editCell && (
+        <Modal
+          title={`${personName(editCell.profileId)} — ${formatDate(editCell.date)}`}
+          onClose={() => setEditCell(null)}
+        >
+          <p className="text-sm text-aura-700/80 mb-3">Choisissez ce que vous voulez marquer sur cette journée :</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              className="rounded-lg border border-aura-100 px-3 py-2 text-sm font-semibold hover:border-accent-500 text-left"
+              onClick={() => setCell(editCell.profileId, editCell.date, 'presence')}
+            >
+              <span className="inline-block w-5 h-5 rounded bg-aura-100 text-aura-700 text-[10px] font-bold text-center leading-5 mr-2">P</span>
+              Présence
+            </button>
+            {Object.entries(TYPES).map(([k, t]) => (
+              <button
+                key={k}
+                className="rounded-lg border border-aura-100 px-3 py-2 text-sm font-semibold hover:border-accent-500 text-left"
+                onClick={() => setCell(editCell.profileId, editCell.date, k as LeaveType)}
+              >
+                <span className={`inline-block w-5 h-5 rounded text-[10px] font-bold text-center leading-5 mr-2 ${t.color}`}>{t.code[0]}</span>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-aura-700/60 mt-3">
+            La saisie directe est validée immédiatement (admin / compta). « Présence » retire l'absence
+            existante sur cette journée.
+          </p>
+        </Modal>
+      )}
 
       {showNew && (
         <Modal title="Demande de congé / absence" onClose={() => setShowNew(false)}>
