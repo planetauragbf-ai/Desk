@@ -34,7 +34,7 @@ export default function SetPassword() {
           <img src={logoUrl} alt="Planet Aura" className="h-12 w-12 rounded-full object-contain" />
           <h1 className="text-xl font-extrabold text-aura-950">Bienvenue !</h1>
         </div>
-        <p className="text-sm text-aura-700 mb-6">Choisissez votre mot de passe pour accéder à Planet’Projects.</p>
+        <p className="text-sm text-aura-700 mb-6">Choisissez votre mot de passe pour accéder à Planet’Desk.</p>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
