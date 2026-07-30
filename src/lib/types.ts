@@ -202,6 +202,20 @@ export interface Channel {
   created_by: string | null
   /** Canal privé : visible uniquement de ses membres (et des admins) */
   private?: boolean
+  /** Message privé type WhatsApp : visible uniquement de ses membres */
+  dm?: boolean
+  created_at: string
+}
+
+/** Heures supplémentaires ou retard, à la minute */
+export interface TimeEntry {
+  id: string
+  profile_id: string
+  kind: 'hsupp' | 'retard'
+  date: string
+  minutes: number
+  note: string
+  created_by: string | null
   created_at: string
 }
 
@@ -309,6 +323,7 @@ export interface TableRowMap {
   channel_members: ChannelMember
   poll_votes: PollVote
   leaves: Leave
+  time_entries: TimeEntry
 }
 
 export type TableName = keyof TableRowMap
