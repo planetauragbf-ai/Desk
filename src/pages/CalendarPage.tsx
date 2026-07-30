@@ -36,6 +36,39 @@ const STATUS_BADGES: Record<LeaveStatus, string> = {
   refusee: 'bg-coral-500/15 text-coral-600',
 }
 
+/** Jours fériés français d'une année (fixes + mobiles basés sur Pâques). */
+function frenchHolidays(year: number): Record<string, string> {
+  // Calcul de Pâques (algorithme de Meeus/Butcher)
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100
+  const d0 = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d0 - g + 15) % 30
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const easterMonth = Math.floor((h + l - 7 * m + 114) / 31)
+  const easterDay = ((h + l - 7 * m + 114) % 31) + 1
+  const easter = new Date(year, easterMonth - 1, easterDay)
+  const plus = (base: Date, days: number) => {
+    const d = new Date(base)
+    d.setDate(d.getDate() + days)
+    return d
+  }
+  const iso = (dt: Date) =>
+    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+  return {
+    [`${year}-01-01`]: 'Jour de l’an',
+    [iso(plus(easter, 1))]: 'Lundi de Pâques',
+    [`${year}-05-01`]: 'Fête du Travail',
+    [`${year}-05-08`]: 'Victoire 1945',
+    [iso(plus(easter, 39))]: 'Ascension',
+    [iso(plus(easter, 50))]: 'Lundi de Pentecôte',
+    [`${year}-07-14`]: 'Fête nationale',
+    [`${year}-08-15`]: 'Assomption',
+    [`${year}-11-01`]: 'Toussaint',
+    [`${year}-11-11`]: 'Armistice 1918',
+    [`${year}-12-25`]: 'Noël',
+  }
+}
+
 const monthName = (d: Date) => d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
 // Date locale (PAS toISOString : la conversion UTC décalait tout d'un jour)
 const toIso = (d: Date) =>
@@ -68,6 +101,9 @@ export default function CalendarPage() {
     }
     return out
   }, [month])
+
+  const holidays = useMemo(() => frenchHolidays(month.getFullYear()), [month])
+  const holidayName = (d: Date) => holidays[toIso(d)]
 
   // Congés affichés dans le planning : validés (plein) et en cours de
   // validation (hachuré/transparent).
@@ -288,6 +324,10 @@ export default function CalendarPage() {
               {t.label}
             </span>
           ))}
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block w-4 h-4 rounded text-[8px] font-bold text-center leading-4 bg-coral-500/15 text-coral-600">F</span>
+            Férié
+          </span>
           <span className="text-aura-700/60">· transparent = en attente de validation</span>
           {canEditPlanning && <span className="text-accent-500 font-semibold">· cliquez sur une case pour la modifier</span>}
         </div>
@@ -296,15 +336,22 @@ export default function CalendarPage() {
             <thead>
               <tr>
                 <th className="table-head sticky left-0 bg-aura-50 z-10 min-w-36 text-left">Salarié</th>
-                {days.map((d) => (
-                  <th
-                    key={d.getDate()}
-                    className={`text-[10px] font-semibold px-1 py-1 text-center min-w-7 ${d.getDay() === 0 || d.getDay() === 6 ? 'bg-aura-100 text-aura-700/50' : 'bg-aura-50 text-aura-700'}`}
-                  >
-                    <div>{['D', 'L', 'M', 'M', 'J', 'V', 'S'][d.getDay()]}</div>
-                    <div>{d.getDate()}</div>
-                  </th>
-                ))}
+                {days.map((d) => {
+                  const ferie = holidayName(d)
+                  const weekend = d.getDay() === 0 || d.getDay() === 6
+                  return (
+                    <th
+                      key={d.getDate()}
+                      title={ferie}
+                      className={`text-[10px] font-semibold px-1 py-1 text-center min-w-7 ${
+                        ferie ? 'bg-coral-500/15 text-coral-600' : weekend ? 'bg-aura-100 text-aura-700/50' : 'bg-aura-50 text-aura-700'
+                      }`}
+                    >
+                      <div>{ferie ? '🎌' : ['D', 'L', 'M', 'M', 'J', 'V', 'S'][d.getDay()]}</div>
+                      <div>{d.getDate()}</div>
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
@@ -313,13 +360,15 @@ export default function CalendarPage() {
                   <td className="table-cell sticky left-0 bg-white z-10 text-xs font-semibold whitespace-nowrap">{p.full_name}</td>
                   {days.map((d) => {
                     const weekend = d.getDay() === 0 || d.getDay() === 6
+                    const ferie = holidayName(d)
                     const l = cellLeave(p.id, d)
                     const t = l ? TYPES[l.type] : null
                     return (
                       <td
                         key={d.getDate()}
                         onClick={canEditPlanning ? () => setEditCell({ profileId: p.id, date: toIso(d) }) : undefined}
-                        className={`border border-aura-100 p-0.5 text-center ${weekend ? 'bg-aura-50' : ''} ${
+                        title={ferie}
+                        className={`border border-aura-100 p-0.5 text-center ${ferie ? 'bg-coral-500/10' : weekend ? 'bg-aura-50' : ''} ${
                           canEditPlanning ? 'cursor-pointer hover:bg-accent-500/10' : ''
                         }`}
                       >
@@ -330,6 +379,8 @@ export default function CalendarPage() {
                           >
                             {t.code}
                           </span>
+                        ) : ferie ? (
+                          <span className="block rounded text-[9px] font-bold py-0.5 text-coral-600/70">F</span>
                         ) : !weekend ? (
                           <span className="block rounded text-[9px] font-semibold py-0.5 text-aura-700/40">P</span>
                         ) : null}
@@ -344,6 +395,7 @@ export default function CalendarPage() {
                 <td className="table-cell sticky left-0 bg-aura-50 z-10 text-[11px] font-bold whitespace-nowrap">👥 Présents</td>
                 {days.map((d) => {
                   const weekend = d.getDay() === 0 || d.getDay() === 6
+                  const ferie = holidayName(d)
                   // Présent = pas d'absence ce jour-là (le télétravail et le
                   // retard comptent comme présents).
                   const present = activeProfiles.filter((p) => {
@@ -351,8 +403,8 @@ export default function CalendarPage() {
                     return !l || l.type === 'teletravail' || l.type === 'retard'
                   }).length
                   return (
-                    <td key={d.getDate()} className={`border border-aura-100 p-0.5 text-center text-[10px] font-bold ${weekend ? 'bg-aura-50 text-aura-700/40' : 'bg-aura-50/60 text-aura-900'}`}>
-                      {weekend ? '—' : present}
+                    <td key={d.getDate()} className={`border border-aura-100 p-0.5 text-center text-[10px] font-bold ${ferie ? 'bg-coral-500/10 text-coral-600/60' : weekend ? 'bg-aura-50 text-aura-700/40' : 'bg-aura-50/60 text-aura-900'}`}>
+                      {weekend || ferie ? '—' : present}
                     </td>
                   )
                 })}
