@@ -207,6 +207,50 @@ export interface Channel {
   created_at: string
 }
 
+export type ClaimKind = 'sinistre' | 'litige'
+export type ClaimCategory = 'casse' | 'perte' | 'vol' | 'retard' | 'temperature' | 'erreur_livraison' | 'facturation' | 'autre'
+export type ClaimStatus = 'nouveau' | 'en_cours' | 'attente_transporteur' | 'attente_assurance' | 'attente_client' | 'accepte' | 'refuse' | 'clos'
+
+/** Dossier de sinistre ou de litige (Planet'Claim) */
+export interface Claim {
+  id: string
+  ref: string
+  kind: ClaimKind
+  category: ClaimCategory
+  status: ClaimStatus
+  priority: Priority
+  title: string
+  description: string
+  shipping_ref: string
+  tracking_number: string
+  carrier: string
+  adherent: string
+  destinataire: string
+  pays: string
+  date_incident: string | null
+  deadline: string | null
+  montant_estime: number
+  montant_reclame: number
+  montant_recupere: number
+  assureur: string
+  assignee_id: string | null
+  created_by: string | null
+  created_at: string
+  closed_at: string | null
+}
+
+/** Événement de l'historique d'un dossier (commentaire, statut, document) */
+export interface ClaimEvent {
+  id: string
+  claim_id: string
+  author_id: string | null
+  kind: 'commentaire' | 'statut' | 'document'
+  content: string
+  file_url?: string | null
+  file_name?: string | null
+  created_at: string
+}
+
 /** Heures supplémentaires ou retard, à la minute */
 export interface TimeEntry {
   id: string
@@ -324,6 +368,8 @@ export interface TableRowMap {
   poll_votes: PollVote
   leaves: Leave
   time_entries: TimeEntry
+  claims: Claim
+  claim_events: ClaimEvent
 }
 
 export type TableName = keyof TableRowMap

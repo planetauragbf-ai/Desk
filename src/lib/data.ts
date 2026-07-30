@@ -51,6 +51,7 @@ const AUDITED: Partial<Record<TableName, AuditMeta>> = {
   app_settings: { app: 'administration', label: 'Personnalisation', name: (r) => str(r.key) },
   leaves: { app: 'calendrier', label: 'Congé / absence', name: (r) => `${str(r.type)} du ${str(r.start_date)}` },
   time_entries: { app: 'calendrier', label: 'Heures supp / retard', name: (r) => `${str(r.kind)} du ${str(r.date)}` },
+  claims: { app: 'claim', label: 'Dossier sinistre/litige', name: (r) => `${str(r.ref)} ${str(r.title)}` },
 }
 
 function audit(verb: 'Création' | 'Modification' | 'Suppression', table: TableName, row: Row | null) {

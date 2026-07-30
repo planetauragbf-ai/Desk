@@ -11,6 +11,8 @@ const APP_LABELS: Record<string, string> = {
   chat: 'Chat interne',
   documents: 'Documents',
   liens: 'Liens & outils',
+  calendrier: 'Calendrier',
+  claim: "Planet'Claim",
   administration: 'Administration',
   desk: 'Desk',
 }
@@ -21,6 +23,8 @@ const APP_BADGES: Record<string, string> = {
   chat: 'bg-sky-100 text-sky-800',
   documents: 'bg-emerald-100 text-emerald-800',
   liens: 'bg-amber-100 text-amber-800',
+  calendrier: 'bg-teal-100 text-teal-800',
+  claim: 'bg-indigo-100 text-indigo-800',
   administration: 'bg-aura-100 text-aura-800',
   desk: 'bg-aura-100 text-aura-800',
 }

@@ -37,8 +37,7 @@ export default function Dashboard() {
       to: '/claim',
       module: 'claim',
       title: 'Planet’Claim',
-      desc: 'Gestion des sinistres.',
-      soon: true,
+      desc: 'Sinistres & litiges : déclaration, instruction, indemnisations.',
     },
   ]
 
