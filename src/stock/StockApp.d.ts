@@ -10,5 +10,5 @@ export interface StockSession {
   stockAccess?: StockAccess | null
 }
 
-declare const StockApp: ComponentType<{ session?: StockSession }>
+declare const StockApp: ComponentType<{ session?: StockSession; forcedTab?: string }>
 export default StockApp

@@ -27,6 +27,17 @@ export interface StockAccess {
   adherent_id?: string | null
 }
 
+/** Autorisations détaillées ; clé absente ou true = autorisé, false = interdit */
+export type DetailedPerms = Partial<Record<
+  | 'chat_canaux'
+  | 'documents_ajout'
+  | 'documents_dossiers'
+  | 'liens_ajout'
+  | 'liens_dossiers'
+  | 'notes_ajout',
+  boolean
+>>
+
 export interface Profile {
   id: string
   full_name: string
@@ -37,6 +48,10 @@ export interface Profile {
   modules: string[] | null
   /** Accès Planet'Stock défini par l'admin ; null = correspondance email / admin */
   stock_access?: StockAccess | null
+  /** Accès désactivé par l'administrateur */
+  disabled?: boolean
+  /** Autorisations détaillées (null = tout autorisé) */
+  perms?: DetailedPerms | null
   created_at: string
 }
 

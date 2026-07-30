@@ -1948,7 +1948,7 @@ const adminTabs=[{id:"dashboard",label:"Dashboard",icon:"📊"},{id:"adherents",
 
 const adherentTabs=[{id:"adherent",label:"Mon Espace",icon:"👤"}];
 
-export default function App({session}){const[d,sR]=useState(null);const[tab,sTab]=useState("dashboard");const[ld2,sLd]=useState(true);const[sb,sSb]=useState(true);
+export default function App({session,forcedTab}){const[d,sR]=useState(null);const[tab,sTab]=useState("dashboard");const[ld2,sLd]=useState(true);const[sb,sSb]=useState(true);
 // Session persistée : sur téléphone, on reste connecté entre deux scans de QR code
 const[currentUser,setCurrentUser]=useState(()=>{try{const s=localStorage.getItem("pa-session");return s?JSON.parse(s):null;}catch{return null;}});
 // Route /stock/fiche/REFxxxx (arrivée via scan de QR code)
@@ -1975,6 +1975,9 @@ auditLog:raw.auditLog||[],
 sR(safe);sLd(false);});},[]);
 
 const sD=useCallback(nd=>{sR(nd);sv(nd);},[]);
+
+// Mode intégré : l'onglet actif est piloté par le menu de Planet'Desk.
+useEffect(()=>{if(forcedTab)sTab(forcedTab);},[forcedTab]);
 
 // Synchro temps réel : adopte les modifications faites sur les autres
 // appareils (ordinateur / téléphone / autres sessions) dès qu'elles arrivent.
@@ -2091,6 +2094,10 @@ const navContent=<>
 <div style={{padding:"6px 0",flex:1,overflowY:"auto"}}>{visibleTabs.map(t=><div key={t.id} onClick={()=>{sTab(t.id);if(isMobile)setDrawer(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:exp?"11px 14px":"9px 12px",cursor:"pointer",background:tab===t.id?P.acs:"transparent",borderLeft:tab===t.id?`3px solid ${P.ac}`:"3px solid transparent",transition:"all .12s"}} onMouseEnter={e=>{if(tab!==t.id)e.currentTarget.style.background=P.sf2;}} onMouseLeave={e=>{if(tab!==t.id)e.currentTarget.style.background="transparent";}}><span style={{fontSize:15,flexShrink:0}}>{t.icon}</span>{exp&&<span style={{fontSize:12,fontWeight:tab===t.id?600:400,color:tab===t.id?P.ac:P.tm,whiteSpace:"nowrap"}}>{t.label}</span>}</div>)}</div>
 {exp&&<div style={{padding:12,borderTop:`1px solid ${P.bd}`,fontSize:8,color:P.td}}>Planet’Stock — © Planet Aura 2026</div>}
 </>;
+
+if(session)return <div style={{fontFamily:FN,background:P.bg,color:P.tx,minHeight:"100vh"}}>
+<div style={{flex:1,overflow:"auto",padding:isMobile?12:24}}><div style={{maxWidth:1120}}><ErrorBoundary key={tab}>{R()}</ErrorBoundary></div></div>
+</div>;
 
 return <div style={{fontFamily:FN,background:P.bg,color:P.tx,minHeight:"100vh",display:"flex",flexDirection:isMobile?"column":"row"}}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>

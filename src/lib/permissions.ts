@@ -1,19 +1,39 @@
-// Gestion des accès : modules visibles par salarié et périmètre
-// de projets/objectifs autorisé. Les administrateurs voient tout.
-import type { Objective, ObjectiveMember, Profile, Task } from './types'
+// Gestion des accès : modules visibles par salarié, autorisations
+// détaillées et périmètre de projets/objectifs autorisé.
+// Les administrateurs voient tout.
+import type { DetailedPerms, Objective, ObjectiveMember, Profile, Task } from './types'
 
 export const MODULES = [
   { key: 'chat', label: 'Chat interne' },
   { key: 'assistant', label: 'Assistant' },
+  { key: 'documents', label: 'Documents' },
+  { key: 'liens', label: 'Liens & outils' },
   { key: 'objectifs', label: 'Objectifs' },
   { key: 'pilotage', label: 'Pilotage' },
   { key: 'workflows', label: 'Workflows' },
   { key: 'notes', label: 'Notes' },
-  { key: 'documents', label: 'Documents' },
-  { key: 'liens', label: 'Liens & outils' },
-  { key: 'stock', label: "Planet'Stock (stockage & picking)" },
   { key: 'organisation', label: 'Organisation' },
+  { key: 'dash', label: "Planet'Dash (suivi logistique)" },
+  { key: 'stock', label: "Planet'Stock (stockage & picking)" },
+  { key: 'claim', label: "Planet'Claim (sinistres)" },
 ] as const
+
+/** Autorisations fines, gérées personne par personne par l'admin. */
+export const PERM_DETAILS: { key: keyof DetailedPerms; label: string }[] = [
+  { key: 'chat_canaux', label: 'Créer des canaux de chat' },
+  { key: 'documents_ajout', label: 'Ajouter / modifier / supprimer des documents' },
+  { key: 'documents_dossiers', label: 'Gérer les dossiers de documents' },
+  { key: 'liens_ajout', label: 'Ajouter / modifier / supprimer des liens' },
+  { key: 'liens_dossiers', label: 'Gérer les catégories de liens' },
+  { key: 'notes_ajout', label: 'Créer / modifier / supprimer des notes' },
+]
+
+/** Autorisation détaillée : admins toujours autorisés ; sinon perms[key] !== false. */
+export function can(profile: Profile | null, key: keyof DetailedPerms): boolean {
+  if (!profile) return false
+  if (profile.role === 'admin') return true
+  return profile.perms?.[key] !== false
+}
 
 export type ModuleKey = (typeof MODULES)[number]['key']
 

@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { insert, remove, update } from '../lib/data'
+import { can } from '../lib/permissions'
 import type { LinkItem } from '../lib/types'
 import { Card, EmptyState, Modal } from '../components/ui'
 
@@ -106,8 +107,12 @@ export default function LinksPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="btn-secondary" onClick={createCategory}>+ Nouvelle catégorie</button>
-          <button className="btn-primary" onClick={() => setShowNew(true)}>+ Ajouter un lien</button>
+          {can(profile, 'liens_dossiers') && (
+            <button className="btn-secondary" onClick={createCategory}>+ Nouvelle catégorie</button>
+          )}
+          {can(profile, 'liens_ajout') && (
+            <button className="btn-primary" onClick={() => setShowNew(true)}>+ Ajouter un lien</button>
+          )}
         </div>
       </div>
 
@@ -128,7 +133,7 @@ export default function LinksPage() {
               <section key={category}>
                 <div className="group/cat flex items-center gap-2 mb-2">
                   <h2 className="text-xs font-bold uppercase tracking-wide text-aura-700/70">{category}</h2>
-                  {category !== 'Général' && (
+                  {category !== 'Général' && can(profile, 'liens_dossiers') && (
                     <span className="hidden group-hover/cat:flex gap-2 text-[11px]">
                       <button className="text-aura-700 underline" onClick={() => renameCategory(category)}>Renommer</button>
                       <button className="text-coral-600 underline" onClick={() => deleteCategory(category)}>Supprimer</button>
@@ -148,6 +153,7 @@ export default function LinksPage() {
                           </span>
                         </span>
                       </a>
+                      {can(profile, 'liens_ajout') && (
                       <div className="absolute top-2 right-2 hidden group-hover:flex gap-2 text-[11px] bg-white/95 rounded px-1.5 py-0.5">
                         <button className="text-aura-700 underline" onClick={() => setEditing(l)}>Modifier</button>
                         <button
@@ -159,6 +165,7 @@ export default function LinksPage() {
                           Supprimer
                         </button>
                       </div>
+                      )}
                     </div>
                   ))}
                 </div>
