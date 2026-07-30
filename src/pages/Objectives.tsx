@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { computeStats } from '../lib/compute'
-import { visibleObjectives } from '../lib/permissions'
+import { canCreateObjectives, visibleObjectives } from '../lib/permissions'
+import { notify } from '../lib/notify'
 import { formatDate, profileName } from '../lib/format'
 import { insert } from '../lib/data'
 import type { Objective, Priority } from '../lib/types'
@@ -40,8 +41,9 @@ export default function Objectives() {
 
   async function createObjective(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!canCreateObjectives(profile)) return
     const fd = new FormData(e.currentTarget)
-    await insert('objectives', {
+    const created = await insert('objectives', {
       title: String(fd.get('title')),
       expected_result: String(fd.get('expected_result') ?? ''),
       parent_id: String(fd.get('parent_id')) || null,
@@ -53,6 +55,10 @@ export default function Objectives() {
       owner_id: String(fd.get('owner_id')) || null,
       created_by: profile?.id ?? null,
     } as Partial<Objective>)
+    const ownerId = String(fd.get('owner_id')) || null
+    if (ownerId && ownerId !== profile?.id) {
+      await notify(ownerId, `Vous êtes référent du nouvel objectif : « ${created.title} »`, `/objectifs/${created.id}`)
+    }
     setParams({})
     refresh()
   }
@@ -61,7 +67,9 @@ export default function Objectives() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-extrabold">Objectifs</h1>
-        <button className="btn-primary" onClick={() => setParams({ nouveau: '1' })}>+ Ajouter un objectif</button>
+        {canCreateObjectives(profile) && (
+          <button className="btn-primary" onClick={() => setParams({ nouveau: '1' })}>+ Ajouter un objectif</button>
+        )}
       </div>
 
       <Card>
@@ -111,7 +119,7 @@ export default function Objectives() {
         )}
       </Card>
 
-      {showNew && (
+      {showNew && canCreateObjectives(profile) && (
         <Modal title="Fixer un objectif" onClose={() => setParams({})}>
           <form onSubmit={createObjective} className="space-y-3">
             <div>

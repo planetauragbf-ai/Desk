@@ -58,6 +58,8 @@ export interface Task {
   assigned_kind: 'salarie' | 'client'
   external_name: string | null
   assignee_id: string | null
+  /** Qui valide : si défini, terminer la tâche demande sa validation */
+  validator_id: string | null
   workflow_group: string | null
   estimated_hours: number | null
   spent_hours: number | null

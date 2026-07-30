@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { computeStats, isCritical } from '../lib/compute'
 import { visibleObjectives } from '../lib/permissions'
-import { formatDate, isPast } from '../lib/format'
+import { notify } from '../lib/notify'
+import { formatDate, isPast, profileName } from '../lib/format'
 import { update } from '../lib/data'
 import { Card, StatTile, EmptyState } from '../components/ui'
 
@@ -12,9 +13,10 @@ export default function Dashboard() {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const { rows: allObjectives } = useTable('objectives')
-  const { rows: tasks } = useTable('tasks')
+  const { rows: tasks, refresh: refreshTasks } = useTable('tasks')
   const { rows: indicators } = useTable('indicators')
   const { rows: membersRows } = useTable('objective_members')
+  const { rows: profiles } = useTable('profiles')
   const { rows: notes } = useTable('notes', undefined, { column: 'updated_at', ascending: false })
   const { rows: notifications, refresh: refreshNotifs } = useTable(
     'notifications',
@@ -64,6 +66,31 @@ export default function Dashboard() {
     refreshNotifs()
   }
 
+  // Tâches soumises à MA validation.
+  const toApprove = tasks.filter((t) => t.validator_id === profile?.id && t.status === 'validation')
+
+  async function approveTask(t: (typeof tasks)[number]) {
+    await update('tasks', t.id, { status: 'termine', completed_at: new Date().toISOString() })
+    if (t.assignee_id && t.assignee_id !== profile?.id) {
+      await notify(t.assignee_id, `Votre tâche « ${t.title} » a été validée ✔`, t.objective_id ? `/objectifs/${t.objective_id}?onglet=taches` : undefined)
+    }
+    refreshTasks()
+  }
+
+  async function rejectTask(t: (typeof tasks)[number]) {
+    const reason = prompt(`Motif du refus de « ${t.title} » (transmis à l'exécutant) :`)
+    if (reason === null) return
+    await update('tasks', t.id, { status: 'en_cours', completed_at: null })
+    if (t.assignee_id && t.assignee_id !== profile?.id) {
+      await notify(
+        t.assignee_id,
+        `Tâche « ${t.title} » refusée par ${profile?.full_name ?? '—'}${reason ? ` : ${reason}` : ''}`,
+        t.objective_id ? `/objectifs/${t.objective_id}?onglet=taches` : undefined,
+      )
+    }
+    refreshTasks()
+  }
+
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-extrabold">Tableau de bord</h1>
@@ -100,12 +127,37 @@ export default function Dashboard() {
               <p className="text-sm text-aura-700/70">Vous n'avez pas de notification importante en attente.</p>
             ) : (
               <ul className="space-y-2">
-                {unread.slice(0, 5).map((n) => (
-                  <li key={n.id} className="text-sm border-b border-aura-100 pb-2 last:border-0">{n.message}</li>
+                {unread.slice(0, 6).map((n) => (
+                  <li key={n.id} className="text-sm border-b border-aura-100 pb-2 last:border-0">
+                    {n.link ? <Link to={n.link} className="hover:underline">{n.message}</Link> : n.message}
+                  </li>
                 ))}
               </ul>
             )}
           </Card>
+
+          {toApprove.length > 0 && (
+            <Card title={<span className="text-amber-700">⚖ Validations à traiter ({toApprove.length})</span>}>
+              <ul className="space-y-2.5">
+                {toApprove.map((t) => (
+                  <li key={t.id} className="flex flex-wrap items-center gap-2 border-b border-aura-100 pb-2.5 last:border-0">
+                    <div className="flex-1 min-w-52">
+                      <div className="text-sm font-medium">
+                        {t.objective_id ? (
+                          <Link to={`/objectifs/${t.objective_id}?onglet=taches`} className="hover:underline">{t.title}</Link>
+                        ) : t.title}
+                      </div>
+                      <div className="text-xs text-aura-700/70">
+                        Fait par {profileName(profiles, t.assignee_id)} · échéance {formatDate(t.due_date)}
+                      </div>
+                    </div>
+                    <button className="btn-primary !px-3 !py-1.5 text-xs" onClick={() => approveTask(t)}>✔ Valider</button>
+                    <button className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => rejectTask(t)}>✘ Refuser</button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
 
           <Card title="Suivi de mon plan d'actions">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -114,7 +166,7 @@ export default function Dashboard() {
               <StatTile label="Objectifs à surveiller" value={toWatch.length} />
               <StatTile label="Tâches à faire" value={myTasks.filter((t) => t.status === 'a_faire' || t.status === 'en_cours').length} />
               <StatTile label="Tâches en retard" value={overdue.length} tone={overdue.length ? 'alert' : 'default'} />
-              <StatTile label="En attente de validation" value={myTasks.filter((t) => t.status === 'validation').length} />
+              <StatTile label="À valider par moi" value={toApprove.length} tone={toApprove.length ? 'alert' : 'default'} />
             </div>
           </Card>
 

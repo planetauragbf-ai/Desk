@@ -3,7 +3,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { computeStats, descendantsOf } from '../lib/compute'
-import { visibleObjectives } from '../lib/permissions'
+import { canCreateObjectives, visibleObjectives } from '../lib/permissions'
+import { notify } from '../lib/notify'
 import { formatDate, isPast, profileName, TASK_STATUS_LABELS } from '../lib/format'
 import { insert, remove, update } from '../lib/data'
 import type { Decision, DocumentMeta, Indicator, Note, Priority, Task, TaskStatus } from '../lib/types'
@@ -333,6 +334,7 @@ function PlanTab({ objectiveId, children, objectives, allTasks, indicators, dire
   refreshTasks: () => void
   refreshObjectives: () => void
 }) {
+  const { profile } = useAuth()
   const [applying, setApplying] = useState(false)
   const [showSub, setShowSub] = useState(false)
   const groups = [...new Set(directTasks.filter((t) => t.workflow_group).map((t) => t.workflow_group!))]
@@ -376,7 +378,7 @@ function PlanTab({ objectiveId, children, objectives, allTasks, indicators, dire
 
   return (
     <div className="space-y-5">
-      <Card title="⧉ Sous-objectifs" action={<button className="text-lg text-aura-700" onClick={() => setShowSub(true)} aria-label="Ajouter un sous-objectif">+</button>}>
+      <Card title="⧉ Sous-objectifs" action={canCreateObjectives(profile) && <button className="text-lg text-aura-700" onClick={() => setShowSub(true)} aria-label="Ajouter un sous-objectif">+</button>}>
         {children.length === 0 ? (
           <EmptyState>Décomposez cet objectif en sous-objectifs pour structurer le plan d'actions.</EmptyState>
         ) : (
@@ -513,6 +515,7 @@ function TasksTab({ objectiveId, tasks, profiles, refresh }: {
   profiles: import('../lib/types').Profile[]
   refresh: () => void
 }) {
+  const { profile } = useAuth()
   const [editing, setEditing] = useState<Task | 'new' | null>(null)
   const [search, setSearch] = useState('')
 
@@ -520,11 +523,31 @@ function TasksTab({ objectiveId, tasks, profiles, refresh }: {
     .filter((t) => t.title.toLowerCase().includes(search.trim().toLowerCase()))
     .sort((a, b) => ((a.due_date ?? '9999') < (b.due_date ?? '9999') ? -1 : 1))
 
+  const taskLink = `/objectifs/${objectiveId}?onglet=taches`
+
   async function setStatus(t: Task, status: TaskStatus) {
+    let target = status
+    // Circuit de validation : si un valideur est désigné, « Terminé »
+    // demandé par quelqu'un d'autre passe d'abord en validation.
+    if (status === 'termine' && t.validator_id && profile?.id !== t.validator_id) {
+      target = 'validation'
+      await notify(
+        t.validator_id,
+        `Validation demandée par ${profile?.full_name ?? '—'} : « ${t.title} »`,
+        taskLink,
+      )
+    }
+    if (status === 'validation' && t.validator_id && profile?.id !== t.validator_id) {
+      await notify(t.validator_id, `Validation demandée : « ${t.title} »`, taskLink)
+    }
     await update('tasks', t.id, {
-      status,
-      completed_at: status === 'termine' ? new Date().toISOString() : null,
+      status: target,
+      completed_at: target === 'termine' ? new Date().toISOString() : null,
     })
+    // Le valideur clôt une tâche en validation : l'exécutant est prévenu.
+    if (target === 'termine' && t.status === 'validation' && t.assignee_id && t.assignee_id !== profile?.id) {
+      await notify(t.assignee_id, `Votre tâche « ${t.title} » a été validée ✔`, taskLink)
+    }
     refresh()
   }
 
@@ -560,6 +583,7 @@ function TasksTab({ objectiveId, tasks, profiles, refresh }: {
                 <th className="table-head">Échéance</th>
                 <th className="table-head">Libellé</th>
                 <th className="table-head">Qui fait</th>
+                <th className="table-head">Qui valide</th>
                 <th className="table-head">Statut</th>
                 <th className="table-head">Priorité</th>
                 <th className="table-head rounded-r-lg w-16"></th>
@@ -586,6 +610,7 @@ function TasksTab({ objectiveId, tasks, profiles, refresh }: {
                     {t.workflow_group && <span className="ml-2 text-[10px] rounded bg-aura-100 px-1.5 py-0.5 text-aura-700">{t.workflow_group}</span>}
                   </td>
                   <td className="table-cell">{doerLabel(t)}</td>
+                  <td className="table-cell whitespace-nowrap">{profileName(profiles, t.validator_id)}</td>
                   <td className="table-cell">
                     <select
                       className="rounded-md border border-aura-200 text-xs px-1.5 py-1 bg-white"
@@ -628,6 +653,7 @@ function TaskEditModal({ objectiveId, task, profiles, onClose, onSaved }: {
   onClose: () => void
   onSaved: () => void
 }) {
+  const { profile } = useAuth()
   const [kind, setKind] = useState<'salarie' | 'client'>(task?.assigned_kind ?? 'salarie')
   const { rows: allDocs, refresh: refreshDocs } = useTable('documents', undefined, { column: 'created_at', ascending: false })
   const taskDocs = task ? allDocs.filter((d) => d.task_id === task.id) : []
@@ -643,11 +669,26 @@ function TaskEditModal({ objectiveId, task, profiles, onClose, onSaved }: {
       assigned_kind: kind,
       assignee_id: kind === 'salarie' ? String(fd.get('assignee_id')) || null : null,
       external_name: kind === 'client' ? String(fd.get('external_name')) || null : null,
+      validator_id: String(fd.get('validator_id')) || null,
     }
+    const taskLink = `/objectifs/${objectiveId}?onglet=taches`
     if (task) {
       await update('tasks', task.id, payload)
+      // Nouvelle attribution ou nouveau valideur : les intéressés sont prévenus.
+      if (payload.assignee_id && payload.assignee_id !== task.assignee_id && payload.assignee_id !== profile?.id) {
+        await notify(payload.assignee_id, `Une tâche vous a été attribuée : « ${payload.title} »`, taskLink)
+      }
+      if (payload.validator_id && payload.validator_id !== task.validator_id && payload.validator_id !== profile?.id) {
+        await notify(payload.validator_id, `Vous êtes désigné(e) valideur de « ${payload.title} »`, taskLink)
+      }
     } else {
       await insert('tasks', { ...payload, objective_id: objectiveId, status: 'a_faire' } as Partial<Task>)
+      if (payload.assignee_id && payload.assignee_id !== profile?.id) {
+        await notify(payload.assignee_id, `Une tâche vous a été attribuée : « ${payload.title} »`, taskLink)
+      }
+      if (payload.validator_id && payload.validator_id !== profile?.id) {
+        await notify(payload.validator_id, `Vous êtes désigné(e) valideur de « ${payload.title} »`, taskLink)
+      }
     }
     onSaved()
   }
@@ -721,6 +762,18 @@ function TaskEditModal({ objectiveId, task, profiles, onClose, onSaved }: {
               defaultValue={task?.external_name ?? ''}
             />
           )}
+        </div>
+
+        <div>
+          <label className="label">Qui valide ?</label>
+          <select name="validator_id" className="input" defaultValue={task?.validator_id ?? ''}>
+            <option value="">Personne (la tâche se termine directement)</option>
+            {profiles.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+          </select>
+          <p className="text-[11px] text-aura-700/60 mt-1">
+            Si un valideur est désigné, la tâche terminée passe « En validation » et il reçoit la demande
+            sur son tableau de bord.
+          </p>
         </div>
 
         <div className="flex justify-end gap-2 pt-1">

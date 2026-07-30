@@ -13,6 +13,11 @@ export const MODULES = [
 
 export type ModuleKey = (typeof MODULES)[number]['key']
 
+/** Créer des objectifs (et sous-objectifs) : administrateurs et référents. */
+export function canCreateObjectives(profile: Profile | null): boolean {
+  return profile?.role === 'admin' || profile?.role === 'referent'
+}
+
 export function canAccessModule(profile: Profile | null, module: ModuleKey): boolean {
   if (!profile) return false
   if (profile.role === 'admin') return true
