@@ -7,11 +7,14 @@ import { Avatar } from './ui'
 
 const NAV: { to: string; label: string; icon: string; module?: ModuleKey }[] = [
   { to: '/tableau-de-bord', label: 'Tableau de bord', icon: '◧' },
+  { to: '/chat', label: 'Chat interne', icon: '💬', module: 'chat' },
+  { to: '/assistant', label: 'Assistant Aura', icon: '✦', module: 'assistant' },
   { to: '/objectifs', label: 'Objectifs', icon: '◎', module: 'objectifs' },
   { to: '/pilotage', label: 'Pilotage', icon: '⇗', module: 'pilotage' },
   { to: '/workflows', label: 'Workflows', icon: '⟳', module: 'workflows' },
   { to: '/notes', label: 'Notes', icon: '✎', module: 'notes' },
   { to: '/documents', label: 'Documents', icon: '▤', module: 'documents' },
+  { to: '/liens', label: 'Liens & outils', icon: '⌘', module: 'liens' },
   { to: '/organisation', label: 'Organisation', icon: '⌂', module: 'organisation' },
 ]
 

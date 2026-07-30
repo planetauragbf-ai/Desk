@@ -53,3 +53,16 @@ insert into public.indicators (objective_id, name, unit, target_value, current_v
 
 insert into public.decisions (objective_id, title, context, status) values
   ('22222222-2222-2222-2222-222222222202', 'Choix du CMS ou développement sur mesure', 'Comparer coût, autonomie de l''équipe et délais.', 'en_instruction');
+
+-- Chat interne (nécessite 0006_chat_liens.sql)
+insert into public.channels (id, name, description) values
+  ('55555555-5555-5555-5555-555555555501', 'Communication', 'Site web, réseaux sociaux et communauté.'),
+  ('55555555-5555-5555-5555-555555555502', 'Événements', 'Préparation de l''événement annuel.')
+on conflict (name) do nothing;
+
+-- Liens & outils (nécessite 0006_chat_liens.sql)
+insert into public.links (label, url, description, category, emoji) values
+  ('Gmail', 'https://mail.google.com', 'Messagerie de Planet Aura.', 'Communication', '📧'),
+  ('Google Drive', 'https://drive.google.com', 'Stockage partagé des fichiers.', 'Gestion', '📁'),
+  ('Google Agenda', 'https://calendar.google.com', 'Calendrier de l''équipe.', 'Gestion', '🗓️'),
+  ('Canva', 'https://www.canva.com', 'Création graphique : affiches, posts, présentations.', 'Design', '🎨');

@@ -155,6 +155,36 @@ export interface AppSetting {
   updated_at: string
 }
 
+/** Canal de discussion du chat interne */
+export interface Channel {
+  id: string
+  name: string
+  description: string
+  created_by: string | null
+  created_at: string
+}
+
+/** Message posté dans un canal */
+export interface Message {
+  id: string
+  channel_id: string
+  author_id: string | null
+  content: string
+  created_at: string
+}
+
+/** Lien vers un outil, une application ou un raccourci de l'équipe */
+export interface LinkItem {
+  id: string
+  label: string
+  url: string
+  description: string
+  category: string
+  emoji: string
+  author_id: string | null
+  created_at: string
+}
+
 export interface TableRowMap {
   instances: Instance
   profiles: Profile
@@ -170,6 +200,9 @@ export interface TableRowMap {
   decisions: Decision
   indicators: Indicator
   notifications: Notification
+  channels: Channel
+  messages: Message
+  links: LinkItem
 }
 
 export type TableName = keyof TableRowMap

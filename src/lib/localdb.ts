@@ -3,7 +3,7 @@
 // n'est pas configurée, afin de pouvoir essayer l'application sans backend.
 import type { TableName, TableRowMap } from './types'
 
-const STORAGE_KEY = 'planet-aura-db-v2'
+const STORAGE_KEY = 'planet-aura-db-v3'
 
 export const DEMO_USER_ID = 'demo-0000-0000-0000-000000000001'
 
@@ -46,6 +46,7 @@ function seed(): Db {
   }
   const wf = { event: uid() }
   const steps = { cadrage: uid(), preparation: uid(), jourj: uid() }
+  const chan = { general: uid(), communication: uid(), evenements: uid() }
 
   const db: Db = {
     instances: [
@@ -146,6 +147,24 @@ function seed(): Db {
     notifications: [
       { id: uid(), user_id: DEMO_USER_ID, message: "3 tâches arrivent à échéance dans les 7 prochains jours.", link: '/tableau-de-bord', read: false, created_at: iso(-1) },
       { id: uid(), user_id: DEMO_USER_ID, message: "La décision « Événement payant ou gratuit » a été arbitrée.", link: null, read: false, created_at: iso(-4) },
+    ],
+    channels: [
+      { id: chan.general, name: 'Général', description: "Canal ouvert à toute l'équipe Planet Aura.", created_by: users.admin, created_at: iso(-60) },
+      { id: chan.communication, name: 'Communication', description: 'Site web, réseaux sociaux et communauté.', created_by: users.lea, created_at: iso(-40) },
+      { id: chan.evenements, name: 'Événements', description: "Préparation de l'événement annuel.", created_by: users.marco, created_at: iso(-10) },
+    ],
+    messages: [
+      { id: uid(), channel_id: chan.general, author_id: users.admin, content: "Bienvenue sur le chat interne de Planet Aura ! 🌍 Ici, on partage les infos de toute l'équipe.", created_at: iso(-60) },
+      { id: uid(), channel_id: chan.general, author_id: users.lea, content: 'Super, plus besoin de courir après les mails 🙌', created_at: iso(-59) },
+      { id: uid(), channel_id: chan.communication, author_id: users.lea, content: 'La maquette du nouveau site part en relecture cette semaine.', created_at: iso(-3) },
+      { id: uid(), channel_id: chan.evenements, author_id: users.marco, content: "Deux lieux présélectionnés pour l'événement annuel, comparatif en cours dans les notes.", created_at: iso(-2) },
+    ],
+    links: [
+      { id: uid(), label: 'Gmail', url: 'https://mail.google.com', description: 'Messagerie de Planet Aura.', category: 'Communication', emoji: '📧', author_id: users.admin, created_at: iso(-60) },
+      { id: uid(), label: 'Google Drive', url: 'https://drive.google.com', description: 'Stockage partagé des fichiers.', category: 'Gestion', emoji: '📁', author_id: users.admin, created_at: iso(-60) },
+      { id: uid(), label: 'Google Agenda', url: 'https://calendar.google.com', description: "Calendrier de l'équipe.", category: 'Gestion', emoji: '🗓️', author_id: users.admin, created_at: iso(-60) },
+      { id: uid(), label: 'Canva', url: 'https://www.canva.com', description: 'Création graphique : affiches, posts, présentations.', category: 'Design', emoji: '🎨', author_id: users.lea, created_at: iso(-40) },
+      { id: uid(), label: 'Instagram Planet Aura', url: 'https://www.instagram.com', description: 'Compte officiel de la communauté.', category: 'Communication', emoji: '🌍', author_id: users.lea, created_at: iso(-40) },
     ],
   }
   return db
