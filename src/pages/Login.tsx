@@ -3,12 +3,11 @@ import { useAuth } from '../context/AuthContext'
 import { useBranding } from '../context/BrandingContext'
 
 export default function Login() {
-  const { signIn, signUp } = useAuth()
+  const { signIn, sendPasswordReset } = useAuth()
   const { logoUrl } = useBranding()
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [mode, setMode] = useState<'signin' | 'reset'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [fullName, setFullName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -21,11 +20,11 @@ export default function Login() {
     try {
       if (mode === 'signin') {
         const err = await signIn(email, password)
-        if (err) setError(err)
+        if (err) setError(err === 'Invalid login credentials' ? 'Email ou mot de passe incorrect.' : err)
       } else {
-        const err = await signUp(email, password, fullName)
+        const err = await sendPasswordReset(email)
         if (err) setError(err)
-        else setInfo('Compte créé. Vérifiez votre boîte mail si une confirmation est demandée, puis connectez-vous.')
+        else setInfo('Email envoyé. Cliquez sur le lien reçu pour définir votre mot de passe, puis reconnectez-vous.')
       }
     } finally {
       setBusy(false)
@@ -33,7 +32,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-aura-950 via-aura-800 to-accent-500 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-aura-950 via-aura-900 to-accent-400 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
         <div className="flex items-center gap-3 mb-6">
           <img src={logoUrl} alt="Planet Aura" className="h-12 w-12 rounded-full object-contain" />
@@ -44,35 +43,36 @@ export default function Login() {
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
-          {mode === 'signup' && (
-            <div>
-              <label className="label" htmlFor="fullName">Nom complet</label>
-              <input id="fullName" className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-            </div>
-          )}
           <div>
             <label className="label" htmlFor="email">Email</label>
             <input id="email" type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
-          <div>
-            <label className="label" htmlFor="password">Mot de passe</label>
-            <input id="password" type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
-          </div>
+          {mode === 'signin' && (
+            <div>
+              <label className="label" htmlFor="password">Mot de passe</label>
+              <input id="password" type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+            </div>
+          )}
 
           {error && <p className="text-sm text-coral-600">{error}</p>}
           {info && <p className="text-sm text-emerald-700">{info}</p>}
 
           <button type="submit" className="btn-primary w-full justify-center" disabled={busy}>
-            {busy ? 'Un instant…' : mode === 'signin' ? 'Se connecter' : 'Créer mon compte'}
+            {busy ? 'Un instant…' : mode === 'signin' ? 'Se connecter' : 'Recevoir le lien par email'}
           </button>
         </form>
 
         <button
-          className="mt-4 text-sm text-aura-700 hover:text-aura-900 underline"
-          onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null); setInfo(null) }}
+          className="mt-4 text-sm text-aura-700 hover:text-aura-950 underline"
+          onClick={() => { setMode(mode === 'signin' ? 'reset' : 'signin'); setError(null); setInfo(null) }}
         >
-          {mode === 'signin' ? "Pas encore de compte ? S'inscrire" : 'Déjà un compte ? Se connecter'}
+          {mode === 'signin' ? 'Mot de passe oublié ou premier accès ?' : '← Retour à la connexion'}
         </button>
+
+        <p className="mt-4 text-xs text-aura-700/70">
+          Les comptes sont créés par l'administrateur Planet Aura. Vous avez reçu un email d'accès ?
+          Cliquez sur son lien pour définir votre mot de passe.
+        </p>
       </div>
     </div>
   )

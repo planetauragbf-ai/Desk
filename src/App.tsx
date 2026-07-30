@@ -13,6 +13,7 @@ import NotesPage from './pages/NotesPage'
 import DocumentsPage from './pages/DocumentsPage'
 import Organisation from './pages/Organisation'
 import Administration from './pages/Administration'
+import SetPassword from './pages/SetPassword'
 
 function Guard({ module, children }: { module: ModuleKey; children: ReactNode }) {
   const { profile } = useAuth()
@@ -21,7 +22,7 @@ function Guard({ module, children }: { module: ModuleKey; children: ReactNode })
 }
 
 export default function App() {
-  const { loading, profile } = useAuth()
+  const { loading, profile, passwordRecovery } = useAuth()
 
   if (loading) {
     return (
@@ -30,6 +31,8 @@ export default function App() {
       </div>
     )
   }
+
+  if (passwordRecovery) return <SetPassword />
 
   if (!profile) return <Login />
 

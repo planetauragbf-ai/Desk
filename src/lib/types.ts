@@ -54,6 +54,9 @@ export interface Task {
   status: TaskStatus
   priority: Priority
   due_date: string | null
+  /** Qui fait : un salarié (assignee_id) ou un client/partenaire externe (external_name) */
+  assigned_kind: 'salarie' | 'client'
+  external_name: string | null
   assignee_id: string | null
   workflow_group: string | null
   estimated_hours: number | null

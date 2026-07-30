@@ -513,28 +513,12 @@ function TasksTab({ objectiveId, tasks, profiles, refresh }: {
   profiles: import('../lib/types').Profile[]
   refresh: () => void
 }) {
-  const [showNew, setShowNew] = useState(false)
+  const [editing, setEditing] = useState<Task | 'new' | null>(null)
   const [search, setSearch] = useState('')
 
   const filtered = tasks
     .filter((t) => t.title.toLowerCase().includes(search.trim().toLowerCase()))
     .sort((a, b) => ((a.due_date ?? '9999') < (b.due_date ?? '9999') ? -1 : 1))
-
-  async function createTask(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    await insert('tasks', {
-      objective_id: objectiveId,
-      title: String(fd.get('title')),
-      description: String(fd.get('description') ?? ''),
-      priority: String(fd.get('priority')) as Priority,
-      status: 'a_faire',
-      due_date: String(fd.get('due_date')) || null,
-      assignee_id: String(fd.get('assignee_id')) || null,
-    } as Partial<Task>)
-    setShowNew(false)
-    refresh()
-  }
 
   async function setStatus(t: Task, status: TaskStatus) {
     await update('tasks', t.id, {
@@ -550,23 +534,35 @@ function TasksTab({ objectiveId, tasks, profiles, refresh }: {
     refresh()
   }
 
+  function doerLabel(t: Task) {
+    if ((t.assigned_kind ?? 'salarie') === 'client') {
+      return (
+        <span className="whitespace-nowrap">
+          {t.external_name || 'Externe'}
+          <span className="ml-1.5 text-[10px] rounded bg-amber-100 text-amber-800 px-1.5 py-0.5 font-semibold">Client</span>
+        </span>
+      )
+    }
+    return profileName(profiles, t.assignee_id)
+  }
+
   return (
-    <Card title="◔ Tâches" action={<button className="btn-primary" onClick={() => setShowNew(true)}>+ Ajouter une tâche</button>}>
+    <Card title="◔ Tâches" action={<button className="btn-primary" onClick={() => setEditing('new')}>+ Ajouter une tâche</button>}>
       <input className="input max-w-xs mb-3" placeholder="Rechercher une tâche…" value={search} onChange={(e) => setSearch(e.target.value)} />
       {filtered.length === 0 ? (
         <EmptyState>Aucune tâche sur cet objectif.</EmptyState>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px]">
+          <table className="w-full min-w-[800px]">
             <thead>
               <tr>
                 <th className="table-head rounded-l-lg w-8"></th>
                 <th className="table-head">Échéance</th>
                 <th className="table-head">Libellé</th>
-                <th className="table-head">Référent</th>
+                <th className="table-head">Qui fait</th>
                 <th className="table-head">Statut</th>
                 <th className="table-head">Priorité</th>
-                <th className="table-head rounded-r-lg w-10"></th>
+                <th className="table-head rounded-r-lg w-16"></th>
               </tr>
             </thead>
             <tbody>
@@ -584,10 +580,12 @@ function TasksTab({ objectiveId, tasks, profiles, refresh }: {
                     {formatDate(t.due_date)}
                   </td>
                   <td className="table-cell">
-                    <span className={t.status === 'termine' ? 'line-through text-aura-700/50' : 'font-medium'}>{t.title}</span>
+                    <button className="text-left hover:underline" onClick={() => setEditing(t)}>
+                      <span className={t.status === 'termine' ? 'line-through text-aura-700/50' : 'font-medium'}>{t.title}</span>
+                    </button>
                     {t.workflow_group && <span className="ml-2 text-[10px] rounded bg-aura-100 px-1.5 py-0.5 text-aura-700">{t.workflow_group}</span>}
                   </td>
-                  <td className="table-cell whitespace-nowrap">{profileName(profiles, t.assignee_id)}</td>
+                  <td className="table-cell">{doerLabel(t)}</td>
                   <td className="table-cell">
                     <select
                       className="rounded-md border border-aura-200 text-xs px-1.5 py-1 bg-white"
@@ -598,7 +596,8 @@ function TasksTab({ objectiveId, tasks, profiles, refresh }: {
                     </select>
                   </td>
                   <td className="table-cell"><Badge value={t.priority} kind="priority" /></td>
-                  <td className="table-cell">
+                  <td className="table-cell whitespace-nowrap">
+                    <button className="text-aura-700/60 hover:text-aura-950 mr-2" onClick={() => setEditing(t)} aria-label="Modifier">✎</button>
                     <button className="text-aura-700/60 hover:text-coral-600" onClick={() => removeTask(t)} aria-label="Supprimer">🗑</button>
                   </td>
                 </tr>
@@ -608,47 +607,157 @@ function TasksTab({ objectiveId, tasks, profiles, refresh }: {
         </div>
       )}
 
-      {showNew && (
-        <Modal title="Ajouter une tâche" onClose={() => setShowNew(false)}>
-          <form onSubmit={createTask} className="space-y-3">
-            <div>
-              <label className="label">Libellé *</label>
-              <input name="title" className="input" required />
-            </div>
-            <div>
-              <label className="label">Description</label>
-              <textarea name="description" className="input" rows={2} />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="label">Échéance</label>
-                <input type="date" name="due_date" className="input" />
-              </div>
-              <div>
-                <label className="label">Priorité</label>
-                <select name="priority" className="input" defaultValue="moyenne">
-                  <option value="basse">Basse</option>
-                  <option value="moyenne">Moyenne</option>
-                  <option value="haute">Haute</option>
-                  <option value="critique">Critique</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">Référent</label>
-                <select name="assignee_id" className="input" defaultValue="">
-                  <option value="">—</option>
-                  {profiles.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button type="button" className="btn-secondary" onClick={() => setShowNew(false)}>Annuler</button>
-              <button type="submit" className="btn-primary">Créer la tâche</button>
-            </div>
-          </form>
-        </Modal>
+      {editing && (
+        <TaskEditModal
+          key={editing === 'new' ? 'new' : editing.id}
+          objectiveId={objectiveId}
+          task={editing === 'new' ? null : editing}
+          profiles={profiles}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); refresh() }}
+        />
       )}
     </Card>
+  )
+}
+
+function TaskEditModal({ objectiveId, task, profiles, onClose, onSaved }: {
+  objectiveId: string
+  task: Task | null
+  profiles: import('../lib/types').Profile[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [kind, setKind] = useState<'salarie' | 'client'>(task?.assigned_kind ?? 'salarie')
+  const { rows: allDocs, refresh: refreshDocs } = useTable('documents', undefined, { column: 'created_at', ascending: false })
+  const taskDocs = task ? allDocs.filter((d) => d.task_id === task.id) : []
+
+  async function save(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    const payload: Partial<Task> = {
+      title: String(fd.get('title')),
+      description: String(fd.get('description') ?? ''),
+      priority: String(fd.get('priority')) as Priority,
+      due_date: String(fd.get('due_date')) || null,
+      assigned_kind: kind,
+      assignee_id: kind === 'salarie' ? String(fd.get('assignee_id')) || null : null,
+      external_name: kind === 'client' ? String(fd.get('external_name')) || null : null,
+    }
+    if (task) {
+      await update('tasks', task.id, payload)
+    } else {
+      await insert('tasks', { ...payload, objective_id: objectiveId, status: 'a_faire' } as Partial<Task>)
+    }
+    onSaved()
+  }
+
+  async function addDoc(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!task) return
+    const fd = new FormData(e.currentTarget)
+    const name = String(fd.get('doc_name')).trim()
+    if (!name) return
+    await insert('documents', {
+      name,
+      folder: 'Projets',
+      url: String(fd.get('doc_url')) || null,
+      objective_id: objectiveId,
+      task_id: task.id,
+    } as Partial<import('../lib/types').DocumentMeta>)
+    e.currentTarget.reset()
+    refreshDocs()
+  }
+
+  return (
+    <Modal title={task ? 'Modifier la tâche' : 'Ajouter une tâche'} onClose={onClose}>
+      <form onSubmit={save} className="space-y-3">
+        <div>
+          <label className="label">Libellé *</label>
+          <input name="title" className="input" required defaultValue={task?.title ?? ''} />
+        </div>
+        <div>
+          <label className="label">Description</label>
+          <textarea name="description" className="input" rows={3} defaultValue={task?.description ?? ''} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Échéance</label>
+            <input type="date" name="due_date" className="input" defaultValue={task?.due_date ?? ''} />
+          </div>
+          <div>
+            <label className="label">Priorité</label>
+            <select name="priority" className="input" defaultValue={task?.priority ?? 'moyenne'}>
+              <option value="basse">Basse</option>
+              <option value="moyenne">Moyenne</option>
+              <option value="haute">Haute</option>
+              <option value="critique">Critique</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Qui fait ?</label>
+          <div className="flex gap-4 mb-2">
+            <label className="flex items-center gap-1.5 text-sm">
+              <input type="radio" name="kind" checked={kind === 'salarie'} onChange={() => setKind('salarie')} />
+              Salarié
+            </label>
+            <label className="flex items-center gap-1.5 text-sm">
+              <input type="radio" name="kind" checked={kind === 'client'} onChange={() => setKind('client')} />
+              Client / externe
+            </label>
+          </div>
+          {kind === 'salarie' ? (
+            <select name="assignee_id" className="input" defaultValue={task?.assignee_id ?? ''}>
+              <option value="">—</option>
+              {profiles.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+            </select>
+          ) : (
+            <input
+              name="external_name"
+              className="input"
+              placeholder="Nom du client / partenaire (ex. : GL Events, KUNG…)"
+              defaultValue={task?.external_name ?? ''}
+            />
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" className="btn-secondary" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn-primary">{task ? 'Enregistrer' : 'Créer la tâche'}</button>
+        </div>
+      </form>
+
+      {task && (
+        <div className="mt-5 border-t border-aura-100 pt-4">
+          <h4 className="text-sm font-bold mb-2">▤ Documents de la tâche</h4>
+          {taskDocs.length === 0 ? (
+            <p className="text-xs text-aura-700/60 mb-2">Aucun document joint.</p>
+          ) : (
+            <ul className="space-y-1.5 mb-3">
+              {taskDocs.map((d) => (
+                <li key={d.id} className="flex items-center justify-between text-sm rounded bg-aura-50 px-3 py-1.5">
+                  {d.url ? (
+                    <a href={d.url} target="_blank" rel="noreferrer" className="text-accent-500 hover:underline truncate">{d.name}</a>
+                  ) : <span className="truncate">{d.name}</span>}
+                  <button
+                    className="text-aura-700/50 hover:text-coral-600 text-xs ml-2"
+                    onClick={async () => { await remove('documents', d.id); refreshDocs() }}
+                    aria-label="Retirer le document"
+                  >×</button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form onSubmit={addDoc} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+            <input name="doc_name" className="input" placeholder="Nom du document *" required />
+            <input name="doc_url" className="input" placeholder="Lien (URL, optionnel)" />
+            <button type="submit" className="btn-secondary">Joindre</button>
+          </form>
+        </div>
+      )}
+    </Modal>
   )
 }
 

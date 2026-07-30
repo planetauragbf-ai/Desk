@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent } from 'react'
+import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { DEFAULT_LOGO, useBranding } from '../context/BrandingContext'
 import { useTable } from '../hooks/useTable'
@@ -10,6 +10,7 @@ import { Avatar, Card, EmptyState, Modal } from '../components/ui'
 export default function Administration() {
   const { profile: me } = useAuth()
   const [managing, setManaging] = useState<Profile | null>(null)
+  const [creating, setCreating] = useState(false)
 
   const { rows: profiles, refresh: refreshProfiles } = useTable('profiles', undefined, { column: 'full_name', ascending: true })
   const { rows: instances } = useTable('instances', undefined, { column: 'level', ascending: true })
@@ -28,12 +29,16 @@ export default function Administration() {
 
       <BrandingCard />
 
-      <Card title="Comptes salariés">
+      <Card
+        title="Comptes salariés"
+        action={<button className="btn-primary" onClick={() => setCreating(true)}>+ Créer un compte salarié</button>}
+      >
         <p className="text-sm text-aura-700/80 mb-4">
-          Gérez ici les accès de chaque salarié : son rôle, les onglets (modules) qu'il voit dans le menu,
-          et les projets auxquels il a accès. Un salarié voit automatiquement les projets dont il est
-          référent ou sur lesquels une tâche lui est attribuée ; l'accès à un projet ouvre aussi tous ses
-          sous-objectifs. Les administrateurs voient tout.
+          Vous créez ici les comptes de vos salariés : chacun reçoit un email avec un lien pour définir
+          son mot de passe et se connecter. Gérez ensuite leurs accès : rôle, onglets (modules) visibles,
+          et projets accessibles. Un salarié voit automatiquement les projets dont il est référent ou sur
+          lesquels une tâche lui est attribuée ; l'accès à un projet ouvre aussi tous ses sous-objectifs.
+          Les administrateurs voient tout.
         </p>
         {profiles.length === 0 ? (
           <EmptyState>Aucun compte. Les comptes apparaissent ici dès qu'un salarié s'inscrit.</EmptyState>
@@ -88,6 +93,14 @@ export default function Administration() {
         )}
       </Card>
 
+      {creating && (
+        <CreateEmployeeModal
+          instances={instances}
+          onClose={() => setCreating(false)}
+          onCreated={() => { setCreating(false); refreshProfiles() }}
+        />
+      )}
+
       {managing && (
         <ManageAccessModal
           key={managing.id}
@@ -102,6 +115,108 @@ export default function Administration() {
         />
       )}
     </div>
+  )
+}
+
+function CreateEmployeeModal({ instances, onClose, onCreated }: {
+  instances: { id: string; name: string }[]
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const { createEmployee } = useAuth()
+  const [fullName, setFullName] = useState('')
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState<Profile['role']>('membre')
+  const [instanceId, setInstanceId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await createEmployee(fullName.trim(), email.trim().toLowerCase())
+      if (result.error) {
+        setError(result.error)
+        return
+      }
+      // Applique rôle et instance sur le profil créé par le trigger
+      // (petite tolérance au délai de propagation).
+      if (result.userId) {
+        for (let i = 0; i < 5; i++) {
+          try {
+            await update('profiles', result.userId, { role, instance_id: instanceId || null })
+            break
+          } catch {
+            await new Promise((r) => setTimeout(r, 800))
+          }
+        }
+      }
+      setSuccess(true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (success) {
+    return (
+      <Modal title="Compte créé ✔" onClose={onCreated}>
+        <p className="text-sm text-aura-700">
+          Le compte de <strong>{fullName}</strong> est créé. Un email vient d'être envoyé à{' '}
+          <strong>{email}</strong> avec un lien pour définir son mot de passe et se connecter.
+        </p>
+        <p className="text-xs text-aura-700/70 mt-2">
+          Si l'email n'arrive pas : vérifiez les spams, ou renvoyez le lien depuis l'écran de
+          connexion (« Mot de passe oublié ou premier accès ? »).
+        </p>
+        <div className="flex justify-end mt-4">
+          <button className="btn-primary" onClick={onCreated}>Fermer</button>
+        </div>
+      </Modal>
+    )
+  }
+
+  return (
+    <Modal title="Créer un compte salarié" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <div>
+          <label className="label">Nom complet *</label>
+          <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="Ex. : Emma Martin" />
+        </div>
+        <div>
+          <label className="label">Email *</label>
+          <input type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="emma@planet-aura.com" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Rôle</label>
+            <select className="input" value={role} onChange={(e) => setRole(e.target.value as Profile['role'])}>
+              <option value="membre">Membre</option>
+              <option value="referent">Référent</option>
+              <option value="admin">Administrateur</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Instance</label>
+            <select className="input" value={instanceId} onChange={(e) => setInstanceId(e.target.value)}>
+              <option value="">—</option>
+              {instances.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <p className="text-xs text-aura-700/70">
+          Le salarié recevra un email avec un lien pour choisir son mot de passe. Vous pourrez ensuite
+          régler ses onglets et projets via « Gérer les accès ».
+        </p>
+        {error && <p className="text-sm text-coral-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn-secondary" onClick={onClose}>Annuler</button>
+          <button type="submit" className="btn-primary" disabled={busy}>{busy ? 'Création…' : 'Créer et envoyer l\'email'}</button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
