@@ -78,8 +78,10 @@ function stockNav(profile: Profile | null): NavGroup[] {
         items: [t('facturation', 'Relevés', '🧾'), t('compta', 'Compta matière', '⚖'), t('grille', 'Tarifs', '📋')],
       },
       {
+        // Utilisateurs, Journal et Réglages du stock sont retirés : les
+        // comptes, le journal global et les logos se gèrent dans Planet'Desk.
         label: 'Administration',
-        items: [t('adherents', 'Adhérents', '👥'), t('users', 'Utilisateurs', '🔐'), t('journal', 'Journal', '📝'), t('reglages', 'Réglages', '⚙')],
+        items: [t('adherents', 'Adhérents', '👥')],
       },
     ]
   }
@@ -99,7 +101,6 @@ function stockNav(profile: Profile | null): NavGroup[] {
   const groups: NavGroup[] = [{ label: null, items: [t('dashboard', 'Dashboard', '📊')] }]
   if (operations.length) groups.push({ label: 'Opérations', items: operations })
   if (facturation.length) groups.push({ label: 'Facturation', items: facturation })
-  groups.push({ label: 'Suivi', items: [t('journal', 'Journal', '📝')] })
   return groups
 }
 
@@ -284,6 +285,14 @@ export default function Layout() {
               >
                 <span className="text-base w-5 text-center shrink-0">⚙</span>
                 {!collapsed && 'Administration'}
+              </NavLink>
+              <NavLink
+                to="/journal"
+                title="Journal d'activité"
+                className={({ isActive }) => itemClass(isActive, collapsed)}
+              >
+                <span className="text-base w-5 text-center shrink-0">📝</span>
+                {!collapsed && "Journal d'activité"}
               </NavLink>
             </>
           )}

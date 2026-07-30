@@ -206,6 +206,16 @@ export interface Message {
   created_at: string
 }
 
+/** Entrée du journal d'activité global (qui a fait quoi, dans quelle app) */
+export interface AuditEntry {
+  id: string
+  user_id: string | null
+  user_name: string
+  app: string
+  action: string
+  created_at: string
+}
+
 /** Dossier des espaces Documents ('documents') et Liens & outils ('liens') */
 export interface Folder {
   id: string
@@ -245,6 +255,7 @@ export interface TableRowMap {
   messages: Message
   links: LinkItem
   folders: Folder
+  audit_log: AuditEntry
 }
 
 export type TableName = keyof TableRowMap

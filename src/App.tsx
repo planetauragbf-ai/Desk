@@ -14,6 +14,7 @@ import NotesPage from './pages/NotesPage'
 import DocumentsPage from './pages/DocumentsPage'
 import Organisation from './pages/Organisation'
 import Administration from './pages/Administration'
+import JournalPage from './pages/JournalPage'
 import SetPassword from './pages/SetPassword'
 import ChatPage from './pages/ChatPage'
 import AssistantPage from './pages/AssistantPage'
@@ -82,6 +83,7 @@ export default function App() {
         <Route path="/documents" element={<Guard module="documents"><DocumentsPage /></Guard>} />
         <Route path="/organisation" element={<Guard module="organisation"><Organisation /></Guard>} />
         <Route path="/administration" element={<Administration />} />
+        <Route path="/journal" element={<JournalPage />} />
         <Route path="*" element={<Navigate to="/tableau-de-bord" replace />} />
       </Route>
     </Routes>

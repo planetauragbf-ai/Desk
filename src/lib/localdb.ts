@@ -159,6 +159,7 @@ function seed(): Db {
       { id: uid(), channel_id: chan.communication, author_id: users.lea, content: 'La maquette du nouveau site part en relecture cette semaine.', created_at: iso(-3) },
       { id: uid(), channel_id: chan.evenements, author_id: users.marco, content: "Deux lieux présélectionnés pour l'événement annuel, comparatif en cours dans les notes.", created_at: iso(-2) },
     ],
+    audit_log: [],
     folders: [
       { id: uid(), kind: 'documents', name: 'Général', created_at: now },
       { id: uid(), kind: 'documents', name: 'Projets', created_at: now },
