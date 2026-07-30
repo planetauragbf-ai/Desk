@@ -20,11 +20,14 @@ const TYPES: Record<LeaveType, { code: string; label: string; color: string }> =
 }
 
 const STATUS_LABELS: Record<LeaveStatus, string> = {
-  en_attente: 'En attente (admin)',
-  validee_admin: 'En attente (compta)',
+  en_attente: 'En attente',
+  validee_admin: 'En attente',
   validee: 'Validée',
   refusee: 'Refusée',
 }
+
+/** Motifs des saisies directes / imports : exclus de « Mes demandes ». */
+const NON_REQUEST_REASONS = ['Saisie planning', 'Import planning 2026-2027']
 
 const STATUS_BADGES: Record<LeaveStatus, string> = {
   en_attente: 'bg-amber-100 text-amber-800',
@@ -34,7 +37,9 @@ const STATUS_BADGES: Record<LeaveStatus, string> = {
 }
 
 const monthName = (d: Date) => d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
-const toIso = (d: Date) => d.toISOString().slice(0, 10)
+// Date locale (PAS toISOString : la conversion UTC décalait tout d'un jour)
+const toIso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 export default function CalendarPage() {
   const { profile } = useAuth()
@@ -75,9 +80,14 @@ export default function CalendarPage() {
     )
   }
 
-  const myLeaves = leaves.filter((l) => l.profile_id === profile?.id)
-  const pendingAdmin = leaves.filter((l) => l.status === 'en_attente')
-  const pendingCompta = leaves.filter((l) => l.status === 'validee_admin')
+  // « Mes demandes » : uniquement les demandes faites par les salariés
+  // (pas les saisies directes du planning ni l'import).
+  const myLeaves = leaves.filter(
+    (l) => l.profile_id === profile?.id && !NON_REQUEST_REASONS.includes(l.reason),
+  )
+  // Validation unique : un admin OU le service compta (l'ancien statut
+  // intermédiaire validee_admin est traité comme en attente).
+  const pending = leaves.filter((l) => l.status === 'en_attente' || l.status === 'validee_admin')
 
   // Admins et service compta ont la main sur le planning (clic sur une case).
   const canEditPlanning = isAdmin || isCompta
@@ -161,29 +171,26 @@ export default function CalendarPage() {
       reason: String(fd.get('reason') ?? ''),
       status: 'en_attente',
     })
-    // Prévenir les administrateurs.
+    // Prévenir les administrateurs et le service compta (l'un OU l'autre valide).
     const who = profiles.find((p) => p.id === forId)?.full_name ?? 'Un salarié'
     await Promise.all(
       profiles
-        .filter((p) => p.role === 'admin' && p.id !== profile?.id)
+        .filter((p) => (p.role === 'admin' || p.is_compta) && p.id !== profile?.id)
         .map((p) => notify(p.id, `📅 ${who} demande : ${TYPES[created.type].label} du ${formatDate(created.start_date)} au ${formatDate(created.end_date)}`, '/calendrier')),
     )
     setShowNew(false)
     refresh()
   }
 
-  async function approveAdmin(l: Leave) {
-    await update('leaves', l.id, { status: 'validee_admin', admin_by: profile!.id, admin_at: new Date().toISOString() })
-    await Promise.all(
-      profiles.filter((p) => p.is_compta && p.id !== profile?.id).map((p) =>
-        notify(p.id, `📅 Demande de ${profiles.find((x) => x.id === l.profile_id)?.full_name ?? '—'} à valider (compta)`, '/calendrier'),
-      ),
-    )
-    refresh()
-  }
-
-  async function approveCompta(l: Leave) {
-    await update('leaves', l.id, { status: 'validee', compta_by: profile!.id, compta_at: new Date().toISOString() })
+  /** Validation unique : par un admin OU par le service compta. */
+  async function approve(l: Leave) {
+    await update('leaves', l.id, {
+      status: 'validee',
+      admin_by: profile!.id,
+      admin_at: new Date().toISOString(),
+      compta_by: profile!.id,
+      compta_at: new Date().toISOString(),
+    })
     await notify(l.profile_id, `✅ Votre demande (${TYPES[l.type].label} du ${formatDate(l.start_date)}) est validée`, '/calendrier')
     refresh()
   }
@@ -222,7 +229,7 @@ export default function CalendarPage() {
     refreshTime()
   }
 
-  function ValidationList({ items, stage }: { items: Leave[]; stage: 'admin' | 'compta' }) {
+  function ValidationList({ items }: { items: Leave[] }) {
     if (items.length === 0) return <EmptyState>Aucune demande en attente.</EmptyState>
     return (
       <ul className="space-y-2.5">
@@ -234,13 +241,10 @@ export default function CalendarPage() {
               </div>
               <div className="text-xs text-aura-700/70">
                 Du {formatDate(l.start_date)} au {formatDate(l.end_date)} ({workingDays(l)} j ouvrés)
-                {l.reason && <> · {l.reason}</>}
-                {stage === 'compta' && <> · validé par {personName(l.admin_by)}</>}
+                {l.reason && !NON_REQUEST_REASONS.includes(l.reason) && <> · {l.reason}</>}
               </div>
             </div>
-            <button className="btn-primary !px-3 !py-1.5 text-xs" onClick={() => (stage === 'admin' ? approveAdmin(l) : approveCompta(l))}>
-              ✔ Valider
-            </button>
+            <button className="btn-primary !px-3 !py-1.5 text-xs" onClick={() => approve(l)}>✔ Valider</button>
             <button className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => refuse(l)}>✘ Refuser</button>
           </li>
         ))}
@@ -255,19 +259,10 @@ export default function CalendarPage() {
         <button className="btn-primary" onClick={() => setShowNew(true)}>+ Faire une demande</button>
       </div>
 
-      {(isAdmin || isCompta) && (pendingAdmin.length > 0 || pendingCompta.length > 0) && (
-        <div className="grid lg:grid-cols-2 gap-5">
-          {isAdmin && (
-            <Card title={<span className="text-amber-700">⚖ À valider — Admin ({pendingAdmin.length})</span>}>
-              <ValidationList items={pendingAdmin} stage="admin" />
-            </Card>
-          )}
-          {isCompta && (
-            <Card title={<span className="text-sky-700">🧮 À valider — Service compta ({pendingCompta.length})</span>}>
-              <ValidationList items={pendingCompta} stage="compta" />
-            </Card>
-          )}
-        </div>
+      {(isAdmin || isCompta) && pending.length > 0 && (
+        <Card title={<span className="text-amber-700">⚖ Demandes à valider ({pending.length})</span>}>
+          <ValidationList items={pending} />
+        </Card>
       )}
 
       <Card
@@ -323,9 +318,9 @@ export default function CalendarPage() {
                     return (
                       <td
                         key={d.getDate()}
-                        onClick={canEditPlanning && !weekend ? () => setEditCell({ profileId: p.id, date: toIso(d) }) : undefined}
+                        onClick={canEditPlanning ? () => setEditCell({ profileId: p.id, date: toIso(d) }) : undefined}
                         className={`border border-aura-100 p-0.5 text-center ${weekend ? 'bg-aura-50' : ''} ${
-                          canEditPlanning && !weekend ? 'cursor-pointer hover:bg-accent-500/10' : ''
+                          canEditPlanning ? 'cursor-pointer hover:bg-accent-500/10' : ''
                         }`}
                       >
                         {t ? (
@@ -344,6 +339,25 @@ export default function CalendarPage() {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr>
+                <td className="table-cell sticky left-0 bg-aura-50 z-10 text-[11px] font-bold whitespace-nowrap">👥 Présents</td>
+                {days.map((d) => {
+                  const weekend = d.getDay() === 0 || d.getDay() === 6
+                  // Présent = pas d'absence ce jour-là (le télétravail et le
+                  // retard comptent comme présents).
+                  const present = activeProfiles.filter((p) => {
+                    const l = cellLeave(p.id, d)
+                    return !l || l.type === 'teletravail' || l.type === 'retard'
+                  }).length
+                  return (
+                    <td key={d.getDate()} className={`border border-aura-100 p-0.5 text-center text-[10px] font-bold ${weekend ? 'bg-aura-50 text-aura-700/40' : 'bg-aura-50/60 text-aura-900'}`}>
+                      {weekend ? '—' : present}
+                    </td>
+                  )
+                })}
+              </tr>
+            </tfoot>
           </table>
         </div>
       </Card>
@@ -545,7 +559,7 @@ export default function CalendarPage() {
               <input name="reason" className="input" placeholder="Optionnel" />
             </div>
             <p className="text-[11px] text-aura-700/60">
-              La demande est envoyée à l'administrateur, puis au service compta pour validation finale.
+              La demande est envoyée aux administrateurs et au service compta : l'un OU l'autre valide.
             </p>
             <div className="flex justify-end gap-2">
               <button type="button" className="btn-secondary" onClick={() => setShowNew(false)}>Annuler</button>
