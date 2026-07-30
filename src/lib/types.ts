@@ -211,7 +211,7 @@ export type ClaimKind = 'sinistre' | 'litige'
 export type ClaimCategory = 'casse' | 'perte' | 'vol' | 'retard' | 'temperature' | 'erreur_livraison' | 'facturation' | 'autre'
 export type ClaimStatus = 'nouveau' | 'en_cours' | 'attente_transporteur' | 'attente_assurance' | 'attente_client' | 'accepte' | 'refuse' | 'clos'
 
-/** Dossier de sinistre ou de litige (Planet'Claim) */
+/** Dossier de sinistre (Planet'Claim), aligné sur le suivi PA */
 export interface Claim {
   id: string
   ref: string
@@ -221,18 +221,51 @@ export interface Claim {
   priority: Priority
   title: string
   description: string
-  shipping_ref: string
-  tracking_number: string
-  carrier: string
-  adherent: string
-  destinataire: string
+  // Client
+  client_nom?: string
+  client_email?: string
+  client_tel?: string
   pays: string
+  // Commande
+  shipping_ref: string
+  adherent: string
+  date_expedition?: string | null
+  date_livraison?: string | null
+  valeur_commande?: number
+  // Transport
+  carrier: string
+  tracking_number: string
+  lien_suivi?: string
+  lien_transporteur?: string
+  destinataire: string
+  // Sinistre
   date_incident: string | null
-  deadline: string | null
+  nb_bouteilles?: number
   montant_estime: number
-  montant_reclame: number
-  montant_recupere: number
+  lien_drive?: string
+  // Réserves & recours transporteur
+  reserves?: string
+  lrar_le?: string | null
+  ar_le?: string | null
+  reponse_transporteur?: string
+  deadline: string | null
+  // Assureur (Coste Fermon)
   assureur: string
+  cf_declaration?: string | null
+  cf_dossier?: string
+  cf_interlocuteur?: string
+  cf_statut?: string
+  cf_relance?: string | null
+  // Indemnisation
+  montant_reclame: number
+  montant_propose?: number
+  date_accord?: string | null
+  montant_recupere: number
+  date_versement?: string | null
+  // Prochaine action
+  prochaine_action?: string
+  action_echeance?: string | null
+  notes?: string
   assignee_id: string | null
   created_by: string | null
   created_at: string
