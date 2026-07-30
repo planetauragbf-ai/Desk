@@ -28,7 +28,7 @@ export default function SetPassword() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-aura-950 via-aura-900 to-accent-400 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-sand p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
         <div className="flex items-center gap-3 mb-2">
           <img src={logoUrl} alt="Planet Aura" className="h-12 w-12 rounded-full object-contain" />

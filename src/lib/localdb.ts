@@ -159,6 +159,16 @@ function seed(): Db {
       { id: uid(), channel_id: chan.communication, author_id: users.lea, content: 'La maquette du nouveau site part en relecture cette semaine.', created_at: iso(-3) },
       { id: uid(), channel_id: chan.evenements, author_id: users.marco, content: "Deux lieux présélectionnés pour l'événement annuel, comparatif en cours dans les notes.", created_at: iso(-2) },
     ],
+    folders: [
+      { id: uid(), kind: 'documents', name: 'Général', created_at: now },
+      { id: uid(), kind: 'documents', name: 'Projets', created_at: now },
+      { id: uid(), kind: 'documents', name: 'CR réunions', created_at: now },
+      { id: uid(), kind: 'documents', name: 'Directives', created_at: now },
+      { id: uid(), kind: 'liens', name: 'Général', created_at: now },
+      { id: uid(), kind: 'liens', name: 'Communication', created_at: now },
+      { id: uid(), kind: 'liens', name: 'Gestion', created_at: now },
+      { id: uid(), kind: 'liens', name: 'Design', created_at: now },
+    ],
     links: [
       { id: uid(), label: 'Gmail', url: 'https://mail.google.com', description: 'Messagerie de Planet Aura.', category: 'Communication', emoji: '📧', author_id: users.admin, created_at: iso(-60) },
       { id: uid(), label: 'Google Drive', url: 'https://drive.google.com', description: 'Stockage partagé des fichiers.', category: 'Gestion', emoji: '📁', author_id: users.admin, created_at: iso(-60) },

@@ -14,6 +14,15 @@ export default function LinksPage() {
   const [editing, setEditing] = useState<LinkItem | null>(null)
 
   const { rows: links, refresh } = useTable('links', undefined, { column: 'created_at', ascending: true })
+  const { rows: folderRows, refresh: refreshFolders } = useTable('folders', { kind: 'liens' }, { column: 'created_at', ascending: true })
+
+  // Catégories = table folders + catégories encore présentes sur des liens.
+  const allCategories = useMemo(() => {
+    const names = folderRows.map((f) => f.name)
+    for (const l of links) if (!names.includes(l.category)) names.push(l.category)
+    if (!names.includes('Général')) names.unshift('Général')
+    return names
+  }, [folderRows, links])
 
   const categories = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -23,13 +32,47 @@ export default function LinksPage() {
         )
       : links
     const map = new Map<string, LinkItem[]>()
+    // Les catégories vides restent visibles (hors recherche) pour pouvoir les gérer.
+    if (!q) for (const name of allCategories) map.set(name, [])
     for (const l of filtered) {
       const arr = map.get(l.category) ?? []
       arr.push(l)
       map.set(l.category, arr)
     }
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'fr'))
-  }, [links, search])
+  }, [links, search, allCategories])
+
+  async function createCategory() {
+    const name = prompt('Nom de la nouvelle catégorie :')?.trim()
+    if (!name) return
+    if (allCategories.includes(name)) return alert('Cette catégorie existe déjà.')
+    await insert('folders', { kind: 'liens', name })
+    refreshFolders()
+  }
+
+  async function renameCategory(oldName: string) {
+    const name = prompt(`Renommer la catégorie « ${oldName} » en :`, oldName)?.trim()
+    if (!name || name === oldName) return
+    if (allCategories.includes(name)) return alert('Une catégorie porte déjà ce nom.')
+    const row = folderRows.find((f) => f.name === oldName)
+    if (row) await update('folders', row.id, { name })
+    else await insert('folders', { kind: 'liens', name })
+    await Promise.all(links.filter((l) => l.category === oldName).map((l) => update('links', l.id, { category: name })))
+    refreshFolders()
+    refresh()
+  }
+
+  async function deleteCategory(name: string) {
+    const count = links.filter((l) => l.category === name).length
+    if (!confirm(count
+      ? `Supprimer la catégorie « ${name} » ? Ses ${count} lien(s) seront déplacés dans « Général ».`
+      : `Supprimer la catégorie « ${name} » ?`)) return
+    await Promise.all(links.filter((l) => l.category === name).map((l) => update('links', l.id, { category: 'Général' })))
+    const row = folderRows.find((f) => f.name === name)
+    if (row) await remove('folders', row.id)
+    refreshFolders()
+    refresh()
+  }
 
   async function saveLink(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -62,7 +105,10 @@ export default function LinksPage() {
             Tous les outils, applications et raccourcis de l'équipe Planet Aura, à portée de clic.
           </p>
         </div>
-        <button className="btn-primary" onClick={() => setShowNew(true)}>+ Ajouter un lien</button>
+        <div className="flex gap-2">
+          <button className="btn-secondary" onClick={createCategory}>+ Nouvelle catégorie</button>
+          <button className="btn-primary" onClick={() => setShowNew(true)}>+ Ajouter un lien</button>
+        </div>
       </div>
 
       <Card>
@@ -80,7 +126,16 @@ export default function LinksPage() {
           <div className="space-y-6">
             {categories.map(([category, items]) => (
               <section key={category}>
-                <h2 className="text-xs font-bold uppercase tracking-wide text-aura-700/70 mb-2">{category}</h2>
+                <div className="group/cat flex items-center gap-2 mb-2">
+                  <h2 className="text-xs font-bold uppercase tracking-wide text-aura-700/70">{category}</h2>
+                  {category !== 'Général' && (
+                    <span className="hidden group-hover/cat:flex gap-2 text-[11px]">
+                      <button className="text-aura-700 underline" onClick={() => renameCategory(category)}>Renommer</button>
+                      <button className="text-coral-600 underline" onClick={() => deleteCategory(category)}>Supprimer</button>
+                    </span>
+                  )}
+                </div>
+                {items.length === 0 && <p className="text-xs text-aura-700/50 mb-1">Catégorie vide.</p>}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {items.map((l) => (
                     <div key={l.id} className="group relative rounded-lg border border-aura-100 hover:border-accent-400 hover:shadow-card transition-all">
@@ -135,7 +190,9 @@ export default function LinksPage() {
             </div>
             <div>
               <label className="label">Catégorie</label>
-              <input name="category" className="input" defaultValue={editing?.category ?? ''} placeholder="ex. Communication, Gestion, Design…" />
+              <select name="category" className="input" defaultValue={editing?.category ?? 'Général'}>
+                {allCategories.map((c) => <option key={c}>{c}</option>)}
+              </select>
             </div>
             <div>
               <label className="label">Description</label>

@@ -1,291 +1,89 @@
-import { useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useTable } from '../hooks/useTable'
-import { computeStats, isCritical } from '../lib/compute'
-import { canAccessModule, visibleObjectives } from '../lib/permissions'
 import { useBranding } from '../context/BrandingContext'
-import { notify } from '../lib/notify'
-import { formatDate, isPast, profileName } from '../lib/format'
-import { update } from '../lib/data'
-import { Card, StatTile, EmptyState } from '../components/ui'
+import { canAccessModule, type ModuleKey } from '../lib/permissions'
 
+// Accueil Planet'Desk : uniquement les accès aux applications et aux
+// espaces communs. Le suivi du plan d'actions vit dans le tableau de
+// bord de Planet'Projects (/projets).
 export default function Dashboard() {
   const { profile } = useAuth()
   const { logos } = useBranding()
-  const navigate = useNavigate()
-  const { rows: allObjectives } = useTable('objectives')
-  const { rows: tasks, refresh: refreshTasks } = useTable('tasks')
-  const { rows: indicators } = useTable('indicators')
-  const { rows: membersRows } = useTable('objective_members')
-  const { rows: profiles } = useTable('profiles')
-  const { rows: notes } = useTable('notes', undefined, { column: 'updated_at', ascending: false })
-  const { rows: notifications, refresh: refreshNotifs } = useTable(
-    'notifications',
-    profile ? { user_id: profile.id } : undefined,
-    { column: 'created_at', ascending: false },
-  )
 
-  const objectives = useMemo(
-    () => visibleObjectives(profile, allObjectives, membersRows, tasks),
-    [profile, allObjectives, membersRows, tasks],
-  )
-  const myTasks = useMemo(
-    () => tasks.filter((t) => t.assignee_id === profile?.id),
-    [tasks, profile],
-  )
-  const myObjectives = useMemo(
-    () => objectives.filter((o) => o.owner_id === profile?.id && o.status !== 'termine'),
-    [objectives, profile],
-  )
-  const statsById = useMemo(() => {
-    const m = new Map<string, ReturnType<typeof computeStats>>()
-    for (const o of objectives) m.set(o.id, computeStats(o, allObjectives, tasks, indicators))
-    return m
-  }, [objectives, allObjectives, tasks, indicators])
+  const apps: { logo: string; to: string; module: ModuleKey; title: string; desc: string }[] = [
+    {
+      logo: logos.projects,
+      to: '/projets',
+      module: 'objectifs',
+      title: 'Planet’Projects',
+      desc: 'Pilotage : objectifs, plans d’actions, process, notes et décisions.',
+    },
+    {
+      logo: logos.stock,
+      to: '/stock',
+      module: 'stock',
+      title: 'Planet’Stock',
+      desc: 'Stockage & picking : références, entrées/sorties, espaces, relevés.',
+    },
+  ]
 
-  const critical = objectives.filter((o) => {
-    const s = statsById.get(o.id)
-    return s && isCritical(s, o)
-  })
-  const toWatch = objectives.filter((o) => {
-    const s = statsById.get(o.id)
-    return o.status !== 'termine' && s && s.probability < 60 && !isCritical(s, o)
-  })
+  const spaces: { icon: string; to: string; module: ModuleKey; title: string; desc: string }[] = [
+    { icon: '💬', to: '/chat', module: 'chat', title: 'Chat interne', desc: "Discuter avec l'équipe" },
+    { icon: '✦', to: '/assistant', module: 'assistant', title: 'Assistant Aura', desc: 'Chercher dans toutes les données' },
+    { icon: '▤', to: '/documents', module: 'documents', title: 'Documents', desc: 'Déposer et retrouver les fichiers' },
+    { icon: '⌘', to: '/liens', module: 'liens', title: 'Liens & outils', desc: 'Tous les outils de l’équipe' },
+  ]
 
-  const in14days = new Date()
-  in14days.setDate(in14days.getDate() + 14)
-  const horizon = in14days.toISOString().slice(0, 10)
-  const upcoming = myTasks
-    .filter((t) => t.status !== 'termine' && t.due_date && t.due_date <= horizon)
-    .sort((a, b) => (a.due_date! < b.due_date! ? -1 : 1))
-  const overdue = upcoming.filter((t) => isPast(t.due_date))
-
-  const unread = notifications.filter((n) => !n.read)
-
-  async function markAllRead() {
-    await Promise.all(unread.map((n) => update('notifications', n.id, { read: true })))
-    refreshNotifs()
-  }
-
-  // Tâches soumises à MA validation.
-  const toApprove = tasks.filter((t) => t.validator_id === profile?.id && t.status === 'validation')
-
-  async function approveTask(t: (typeof tasks)[number]) {
-    await update('tasks', t.id, { status: 'termine', completed_at: new Date().toISOString() })
-    if (t.assignee_id && t.assignee_id !== profile?.id) {
-      await notify(t.assignee_id, `Votre tâche « ${t.title} » a été validée ✔`, t.objective_id ? `/objectifs/${t.objective_id}?onglet=taches` : undefined)
-    }
-    refreshTasks()
-  }
-
-  async function rejectTask(t: (typeof tasks)[number]) {
-    const reason = prompt(`Motif du refus de « ${t.title} » (transmis à l'exécutant) :`)
-    if (reason === null) return
-    await update('tasks', t.id, { status: 'en_cours', completed_at: null })
-    if (t.assignee_id && t.assignee_id !== profile?.id) {
-      await notify(
-        t.assignee_id,
-        `Tâche « ${t.title} » refusée par ${profile?.full_name ?? '—'}${reason ? ` : ${reason}` : ''}`,
-        t.objective_id ? `/objectifs/${t.objective_id}?onglet=taches` : undefined,
-      )
-    }
-    refreshTasks()
-  }
+  const visibleApps = apps.filter((a) => canAccessModule(profile, a.module))
+  const visibleSpaces = spaces.filter((s) => canAccessModule(profile, s.module))
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-2xl font-extrabold">Tableau de bord</h1>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {[
-          {
-            app: 'projects' as const,
-            to: '/objectifs',
-            module: 'objectifs' as const,
-            title: "Planet’Projects",
-            desc: 'Pilotage : objectifs, plans d’actions, process et décisions.',
-          },
-          {
-            app: 'stock' as const,
-            to: '/stock',
-            module: 'stock' as const,
-            title: "Planet’Stock",
-            desc: 'Stockage & picking : références, entrées/sorties, espaces, relevés.',
-          },
-        ]
-          .filter((t) => canAccessModule(profile, t.module))
-          .map((t) => (
-            <Link
-              key={t.app}
-              to={t.to}
-              className="card flex items-center gap-4 hover:shadow-lg transition-shadow !p-4"
-            >
-              <img src={logos[t.app]} alt={t.title} className="h-12 w-12 rounded-full border border-aura-100 bg-white object-contain" />
-              <div className="min-w-0">
-                <div className="text-sm font-extrabold text-aura-950">{t.title}</div>
-                <div className="text-xs text-aura-700/80 mt-0.5">{t.desc}</div>
-              </div>
-              <span className="ml-auto text-aura-700/50 text-lg">→</span>
-            </Link>
-          ))}
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-extrabold">
+          Bonjour {profile?.full_name?.split(' ')[0] ?? ''} 👋
+        </h1>
+        <p className="text-sm text-aura-700/80 mt-1">Bienvenue sur Planet'Desk, le bureau numérique de Planet Aura.</p>
       </div>
 
-      <Card title="Que souhaitez-vous faire ?">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'Fixer un objectif', to: '/objectifs?nouveau=1', icon: '◎' },
-            { label: 'Ajouter une tâche', to: '/objectifs', icon: '☑' },
-            { label: 'Prendre des notes', to: '/notes?nouvelle=1', icon: '✎' },
-            { label: 'Créer un workflow', to: '/workflows?nouveau=1', icon: '⟳' },
-          ].map((a) => (
-            <button
-              key={a.label}
-              onClick={() => navigate(a.to)}
-              className="flex flex-col items-center gap-2 rounded-lg py-4 hover:bg-aura-50 transition-colors"
-            >
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-aura-800 text-white text-lg">{a.icon}</span>
-              <span className="text-xs font-semibold text-aura-800">{a.label}</span>
-            </button>
-          ))}
-        </div>
-      </Card>
+      {visibleApps.length > 0 && (
+        <section>
+          <h2 className="text-xs font-bold uppercase tracking-widest text-aura-700/60 mb-3">Applications</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {visibleApps.map((a) => (
+              <Link
+                key={a.to}
+                to={a.to}
+                className="card flex items-center gap-4 hover:shadow-lg transition-shadow"
+              >
+                <img src={a.logo} alt={a.title} className="h-14 w-14 rounded-full border border-aura-100 bg-white object-contain" />
+                <div className="min-w-0">
+                  <div className="text-base font-extrabold text-aura-950">{a.title}</div>
+                  <div className="text-xs text-aura-700/80 mt-0.5">{a.desc}</div>
+                </div>
+                <span className="ml-auto text-accent-500 text-xl">→</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
-      <div className="grid lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 space-y-5">
-          <Card
-            title={<span className="text-coral-600">Notifications importantes</span>}
-            action={unread.length > 0 && (
-              <button className="text-xs text-aura-700 underline" onClick={markAllRead}>Tout marquer lu</button>
-            )}
-          >
-            {unread.length === 0 ? (
-              <p className="text-sm text-aura-700/70">Vous n'avez pas de notification importante en attente.</p>
-            ) : (
-              <ul className="space-y-2">
-                {unread.slice(0, 6).map((n) => (
-                  <li key={n.id} className="text-sm border-b border-aura-100 pb-2 last:border-0">
-                    {n.link ? <Link to={n.link} className="hover:underline">{n.message}</Link> : n.message}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          {toApprove.length > 0 && (
-            <Card title={<span className="text-amber-700">⚖ Validations à traiter ({toApprove.length})</span>}>
-              <ul className="space-y-2.5">
-                {toApprove.map((t) => (
-                  <li key={t.id} className="flex flex-wrap items-center gap-2 border-b border-aura-100 pb-2.5 last:border-0">
-                    <div className="flex-1 min-w-52">
-                      <div className="text-sm font-medium">
-                        {t.objective_id ? (
-                          <Link to={`/objectifs/${t.objective_id}?onglet=taches`} className="hover:underline">{t.title}</Link>
-                        ) : t.title}
-                      </div>
-                      <div className="text-xs text-aura-700/70">
-                        Fait par {profileName(profiles, t.assignee_id)} · échéance {formatDate(t.due_date)}
-                      </div>
-                    </div>
-                    <button className="btn-primary !px-3 !py-1.5 text-xs" onClick={() => approveTask(t)}>✔ Valider</button>
-                    <button className="btn-secondary !px-3 !py-1.5 text-xs" onClick={() => rejectTask(t)}>✘ Refuser</button>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-
-          <Card title="Suivi de mon plan d'actions">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <StatTile label="Mes objectifs" value={myObjectives.length} />
-              <StatTile label="Objectifs critiques" value={critical.length} tone={critical.length ? 'alert' : 'default'} />
-              <StatTile label="Objectifs à surveiller" value={toWatch.length} />
-              <StatTile label="Tâches à faire" value={myTasks.filter((t) => t.status === 'a_faire' || t.status === 'en_cours').length} />
-              <StatTile label="Tâches en retard" value={overdue.length} tone={overdue.length ? 'alert' : 'default'} />
-              <StatTile label="À valider par moi" value={toApprove.length} tone={toApprove.length ? 'alert' : 'default'} />
-            </div>
-          </Card>
-
-          <Card title="Tâches des 14 prochains jours">
-            {upcoming.length === 0 ? (
-              <EmptyState>Aucune tâche à échéance dans les 14 prochains jours.</EmptyState>
-            ) : (
-              <table className="w-full">
-                <thead>
-                  <tr>
-                    <th className="table-head rounded-l-lg">Libellé</th>
-                    <th className="table-head rounded-r-lg text-right">Échéance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {upcoming.map((t) => (
-                    <tr key={t.id}>
-                      <td className={`table-cell ${isPast(t.due_date) ? 'text-coral-600 font-medium' : ''}`}>
-                        {t.objective_id ? (
-                          <Link to={`/objectifs/${t.objective_id}?onglet=taches`} className="hover:underline">{t.title}</Link>
-                        ) : t.title}
-                      </td>
-                      <td className={`table-cell text-right ${isPast(t.due_date) ? 'text-coral-600 font-semibold' : ''}`}>
-                        {formatDate(t.due_date)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
-        </div>
-
-        <div className="space-y-5">
-          <Card title="Notes récentes" action={<Link to="/notes" className="text-xs text-aura-700 underline">Voir tout</Link>}>
-            {notes.length === 0 ? (
-              <EmptyState>Aucune note pour l'instant.</EmptyState>
-            ) : (
-              <ul className="space-y-2">
-                {notes.slice(0, 5).map((n) => (
-                  <li key={n.id} className="text-sm border-b border-aura-100 pb-2 last:border-0">
-                    <Link to="/notes" className="hover:underline">{n.title}</Link>
-                    <span className="text-xs text-aura-700/60"> — {formatDate(n.updated_at)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card title="Dernières tâches attribuées">
-            {myTasks.length === 0 ? (
-              <EmptyState>Aucune tâche attribuée.</EmptyState>
-            ) : (
-              <ul className="space-y-2">
-                {[...myTasks]
-                  .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
-                  .slice(0, 6)
-                  .map((t) => (
-                    <li key={t.id} className="text-sm border-b border-aura-100 pb-2 last:border-0">
-                      {t.objective_id ? (
-                        <Link to={`/objectifs/${t.objective_id}?onglet=taches`} className="hover:underline">{t.title}</Link>
-                      ) : t.title}
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card title="Derniers objectifs suivis">
-            {myObjectives.length === 0 ? (
-              <EmptyState>Aucun objectif dont vous êtes référent.</EmptyState>
-            ) : (
-              <ul className="space-y-2">
-                {myObjectives.slice(0, 5).map((o) => (
-                  <li key={o.id} className="text-sm border-b border-aura-100 pb-2 last:border-0">
-                    <Link to={`/objectifs/${o.id}`} className="hover:underline">{o.title}</Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
-      </div>
+      {visibleSpaces.length > 0 && (
+        <section>
+          <h2 className="text-xs font-bold uppercase tracking-widest text-aura-700/60 mb-3">Espaces communs</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {visibleSpaces.map((s) => (
+              <Link key={s.to} to={s.to} className="card text-center hover:shadow-lg transition-shadow">
+                <span className="flex h-11 w-11 mx-auto items-center justify-center rounded-lg bg-accent-500/10 text-accent-500 text-xl">
+                  {s.icon}
+                </span>
+                <div className="text-sm font-bold text-aura-950 mt-2">{s.title}</div>
+                <div className="text-[11px] text-aura-700/70 mt-0.5">{s.desc}</div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
