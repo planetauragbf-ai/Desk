@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { createEphemeralClient, supabase } from '../lib/supabase'
-import { demoMode, get, insert, list } from '../lib/data'
+import { demoMode, get, insert, list, setAuditActor } from '../lib/data'
 import { DEMO_USER_ID } from '../lib/localdb'
 import type { Profile } from '../lib/types'
 
@@ -42,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const p = await get('profiles', userId)
       if (p) {
         setProfile(p)
+        setAuditActor({ id: p.id, name: p.full_name || p.email })
         return
       }
       await new Promise((r) => setTimeout(r, 600))
@@ -54,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Mode démo : session locale automatique.
       list('profiles', { id: DEMO_USER_ID } as Partial<Profile>).then((rows) => {
         setProfile(rows[0] ?? null)
+        if (rows[0]) setAuditActor({ id: rows[0].id, name: rows[0].full_name })
         setLoading(false)
       })
       return
@@ -80,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (demoMode) return
     await supabase!.auth.signOut()
     setProfile(null)
+    setAuditActor(null)
   }
 
   async function sendPasswordReset(email: string): Promise<string | null> {
