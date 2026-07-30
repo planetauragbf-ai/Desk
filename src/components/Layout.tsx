@@ -23,6 +23,7 @@ const DESK_NAV: NavItem[] = [
   { to: '/assistant', label: 'Assistant Aura', icon: '✦', module: 'assistant' },
   { to: '/documents', label: 'Documents', icon: '▤', module: 'documents' },
   { to: '/liens', label: 'Liens & outils', icon: '⌘', module: 'liens' },
+  { to: '/calendrier', label: 'Calendrier & congés', icon: '🗓', module: 'calendrier' },
 ]
 
 const PROJECTS_NAV: NavItem[] = [
@@ -31,11 +32,10 @@ const PROJECTS_NAV: NavItem[] = [
   { to: '/pilotage', label: 'Pilotage', icon: '⇗', module: 'pilotage' },
   { to: '/workflows', label: 'Process', icon: '⟳', module: 'workflows' },
   { to: '/notes', label: 'Notes', icon: '✎', module: 'notes' },
-  { to: '/organisation', label: 'Organisation', icon: '⌂', module: 'organisation' },
 ]
 
 const DASH_NAV: NavItem[] = [
-  { to: '/dash', label: 'Suivi logistique', icon: '📈', module: 'dash' },
+  { to: '/dash', label: 'Suivi des expéditions', icon: '📈', module: 'dash' },
 ]
 
 const CLAIM_NAV: NavItem[] = [
@@ -231,8 +231,14 @@ function AppSection({ logo, label, groups, mini, storageKey }: {
 export default function Layout() {
   const { profile, signOut } = useAuth()
   const { logos } = useBranding()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const [collapsed, setCollapsed] = usePersistedBool('desk-nav-fermee', false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Sur téléphone, le menu (en haut) se referme après chaque navigation.
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname, search])
 
   const visible = (items: NavItem[]) =>
     items.filter((item) => !item.module || canAccessModule(profile, item.module))
@@ -243,13 +249,89 @@ export default function Layout() {
     .map((g) => ({ ...g, items: visible(g.items) }))
     .filter((g) => g.items.length > 0)
   const claimItems = visible(CLAIM_NAV)
-  // Planet'Stock embarque son propre fond : pleine largeur, sans marges.
-  const fullBleed = pathname.startsWith('/stock')
+  // Planet'Stock et Planet'Dash embarquent leur propre fond : pleine largeur.
+  const fullBleed = pathname.startsWith('/stock') || pathname.startsWith('/dash')
+
+  const navBody = (mini: boolean) => (
+    <>
+      <NavItems items={deskItems} mini={mini} />
+
+      <AppSection logo={logos.projects} label="Planet’Projects" groups={[{ label: null, items: projectItems.length > 1 ? projectItems : [] }]} mini={mini} storageKey="desk-nav-projects" />
+      <AppSection logo={logos.dash} label="Planet’Dash" groups={[{ label: null, items: dashItems }]} mini={mini} storageKey="desk-nav-dash" />
+      <AppSection logo={logos.stock} label="Planet’Stock" groups={stockGroups} mini={mini} storageKey="desk-nav-stock" />
+      <AppSection logo={logos.claim} label="Planet’Claim" groups={[{ label: null, items: claimItems }]} mini={mini} storageKey="desk-nav-claim" />
+
+      {profile?.role === 'admin' && (
+        <>
+          {!mini && (
+            <div className="px-3 pt-4 pb-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-aura-700/60">Gestion</span>
+            </div>
+          )}
+          <NavLink
+            to="/administration"
+            title="Administration"
+            className={({ isActive }) => `${itemClass(isActive, mini)} ${mini ? 'mt-3' : ''}`}
+          >
+            <span className="text-base w-5 text-center shrink-0">⚙</span>
+            {!mini && 'Administration'}
+          </NavLink>
+          <NavLink
+            to="/journal"
+            title="Journal d'activité"
+            className={({ isActive }) => itemClass(isActive, mini)}
+          >
+            <span className="text-base w-5 text-center shrink-0">📝</span>
+            {!mini && "Journal d'activité"}
+          </NavLink>
+        </>
+      )}
+    </>
+  )
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col md:flex-row">
+      {/* ---- Téléphone : menu en haut ---- */}
+      <header className="md:hidden sticky top-0 z-40 bg-white border-b border-aura-100 flex items-center gap-3 px-4 py-2.5">
+        <img src={logos.desk} alt="Planet Aura" className="h-8 w-8 rounded-full border border-aura-100 bg-white p-0.5 object-contain" />
+        <div className="font-extrabold text-aura-950 flex-1">Planet’Desk</div>
+        {profile && <Avatar name={profile.full_name} size={7} />}
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="text-2xl text-aura-800 px-1"
+          aria-label="Menu"
+        >
+          {mobileOpen ? '✕' : '☰'}
+        </button>
+      </header>
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-aura-950/40" onClick={() => setMobileOpen(false)} />
+          <div className="absolute top-0 left-0 right-0 max-h-[85vh] overflow-y-auto bg-white border-b border-aura-100 shadow-xl">
+            <div className="flex items-center gap-3 px-4 py-2.5 border-b border-aura-100">
+              <img src={logos.desk} alt="" className="h-8 w-8 rounded-full border border-aura-100 bg-white p-0.5 object-contain" />
+              <div className="font-extrabold text-aura-950 flex-1">Planet’Desk</div>
+              <button onClick={() => setMobileOpen(false)} className="text-2xl text-aura-800 px-1" aria-label="Fermer">✕</button>
+            </div>
+            <nav className="p-3 space-y-1">{navBody(false)}</nav>
+            {profile && (
+              <div className="px-4 py-3 border-t border-aura-100 flex items-center gap-2.5">
+                <Avatar name={profile.full_name} size={8} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold truncate text-aura-950">{profile.full_name}</div>
+                  <button onClick={signOut} className="text-[11px] text-aura-700/70 hover:text-aura-950">
+                    {demoMode ? 'Mode démo' : 'Se déconnecter'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ---- Ordinateur : bandeau latéral ---- */}
       <aside
-        className={`${collapsed ? 'w-16' : 'w-60'} shrink-0 bg-white border-r border-aura-100 flex flex-col transition-all duration-200`}
+        className={`${collapsed ? 'w-16' : 'w-60'} shrink-0 bg-white border-r border-aura-100 hidden md:flex flex-col transition-all duration-200`}
       >
         <div className={`py-5 ${collapsed ? 'px-2' : 'px-5'}`}>
           <div className={`flex items-center gap-2.5 ${collapsed ? 'justify-center' : ''}`}>
@@ -264,38 +346,7 @@ export default function Layout() {
         </div>
 
         <nav className={`flex-1 space-y-1 overflow-y-auto pb-4 ${collapsed ? 'px-2' : 'px-3'}`}>
-          <NavItems items={deskItems} mini={collapsed} />
-
-          <AppSection logo={logos.projects} label="Planet’Projects" groups={[{ label: null, items: projectItems.length > 1 ? projectItems : [] }]} mini={collapsed} storageKey="desk-nav-projects" />
-          <AppSection logo={logos.dash} label="Planet’Dash" groups={[{ label: null, items: dashItems }]} mini={collapsed} storageKey="desk-nav-dash" />
-          <AppSection logo={logos.stock} label="Planet’Stock" groups={stockGroups} mini={collapsed} storageKey="desk-nav-stock" />
-          <AppSection logo={logos.claim} label="Planet’Claim" groups={[{ label: null, items: claimItems }]} mini={collapsed} storageKey="desk-nav-claim" />
-
-          {profile?.role === 'admin' && (
-            <>
-              {!collapsed && (
-                <div className="px-3 pt-4 pb-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-aura-700/60">Gestion</span>
-                </div>
-              )}
-              <NavLink
-                to="/administration"
-                title="Administration"
-                className={({ isActive }) => `${itemClass(isActive, collapsed)} ${collapsed ? 'mt-3' : ''}`}
-              >
-                <span className="text-base w-5 text-center shrink-0">⚙</span>
-                {!collapsed && 'Administration'}
-              </NavLink>
-              <NavLink
-                to="/journal"
-                title="Journal d'activité"
-                className={({ isActive }) => itemClass(isActive, collapsed)}
-              >
-                <span className="text-base w-5 text-center shrink-0">📝</span>
-                {!collapsed && "Journal d'activité"}
-              </NavLink>
-            </>
-          )}
+          {navBody(collapsed)}
         </nav>
 
         <button
@@ -330,7 +381,7 @@ export default function Layout() {
             Mode démo — données stockées dans ce navigateur. Configurez Supabase (voir README) pour un espace partagé.
           </div>
         )}
-        <main className={fullBleed ? '' : 'p-6 max-w-6xl mx-auto'}>
+        <main className={fullBleed ? '' : 'p-4 md:p-6 max-w-6xl mx-auto'}>
           <Outlet />
         </main>
       </div>

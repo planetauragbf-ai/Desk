@@ -160,6 +160,13 @@ function seed(): Db {
       { id: uid(), channel_id: chan.evenements, author_id: users.marco, content: "Deux lieux présélectionnés pour l'événement annuel, comparatif en cours dans les notes.", created_at: iso(-2) },
     ],
     audit_log: [],
+    channel_members: [],
+    poll_votes: [],
+    leaves: [
+      { id: uid(), profile_id: users.lea, type: 'conge', start_date: day(10), end_date: day(14), reason: 'Congés été', status: 'validee', admin_by: users.admin, admin_at: iso(-2), compta_by: users.admin, compta_at: iso(-1), refusal_reason: '', created_at: iso(-4) },
+      { id: uid(), profile_id: users.marco, type: 'ecole', start_date: day(3), end_date: day(5), reason: '', status: 'validee', admin_by: users.admin, admin_at: iso(-3), compta_by: users.admin, compta_at: iso(-3), refusal_reason: '', created_at: iso(-6) },
+      { id: uid(), profile_id: users.sofia, type: 'conge', start_date: day(20), end_date: day(24), reason: 'Semaine en famille', status: 'en_attente', admin_by: null, admin_at: null, compta_by: null, compta_at: null, refusal_reason: '', created_at: iso(-1) },
+    ],
     folders: [
       { id: uid(), kind: 'documents', name: 'Général', created_at: now },
       { id: uid(), kind: 'documents', name: 'Projets', created_at: now },

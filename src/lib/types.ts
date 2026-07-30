@@ -52,6 +52,10 @@ export interface Profile {
   disabled?: boolean
   /** Autorisations détaillées (null = tout autorisé) */
   perms?: DetailedPerms | null
+  /** Service compta : valide les congés après l'admin */
+  is_compta?: boolean
+  /** Droits de congés payés annuels (jours) */
+  cp_droits?: number
   created_at: string
 }
 
@@ -194,15 +198,59 @@ export interface Channel {
   name: string
   description: string
   created_by: string | null
+  /** Canal privé : visible uniquement de ses membres (et des admins) */
+  private?: boolean
   created_at: string
 }
 
-/** Message posté dans un canal */
+/** Membre d'un canal privé */
+export interface ChannelMember {
+  id: string
+  channel_id: string
+  profile_id: string
+  created_at: string
+}
+
+/** Message posté dans un canal (texte, pièce jointe et/ou sondage) */
 export interface Message {
   id: string
   channel_id: string
   author_id: string | null
   content: string
+  file_url?: string | null
+  file_name?: string | null
+  file_type?: 'image' | 'pdf' | 'fichier' | null
+  /** Questionnaire : {"question":"…","options":["…"]} */
+  poll?: { question: string; options: string[] } | null
+  created_at: string
+}
+
+/** Vote d'un salarié sur un sondage */
+export interface PollVote {
+  id: string
+  message_id: string
+  profile_id: string
+  option_index: number
+  created_at: string
+}
+
+export type LeaveType = 'conge' | 'maladie' | 'ecole' | 'formation' | 'teletravail' | 'recup' | 'absence' | 'retard'
+export type LeaveStatus = 'en_attente' | 'validee_admin' | 'validee' | 'refusee'
+
+/** Demande de congé / absence, validée par un admin puis par la compta */
+export interface Leave {
+  id: string
+  profile_id: string
+  type: LeaveType
+  start_date: string
+  end_date: string
+  reason: string
+  status: LeaveStatus
+  admin_by: string | null
+  admin_at: string | null
+  compta_by: string | null
+  compta_at: string | null
+  refusal_reason: string
   created_at: string
 }
 
@@ -256,6 +304,9 @@ export interface TableRowMap {
   links: LinkItem
   folders: Folder
   audit_log: AuditEntry
+  channel_members: ChannelMember
+  poll_votes: PollVote
+  leaves: Leave
 }
 
 export type TableName = keyof TableRowMap

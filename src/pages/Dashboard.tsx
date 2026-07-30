@@ -23,8 +23,7 @@ export default function Dashboard() {
       to: '/dash',
       module: 'dash',
       title: 'Planet’Dash',
-      desc: 'Dashboard de suivi logistique.',
-      soon: true,
+      desc: 'Suivi des expéditions : UE, Pays Tiers, USA, tracking Ship24.',
     },
     {
       logo: logos.stock,
@@ -48,6 +47,7 @@ export default function Dashboard() {
     { icon: '✦', to: '/assistant', module: 'assistant', title: 'Assistant Aura', desc: 'Chercher dans toutes les données' },
     { icon: '▤', to: '/documents', module: 'documents', title: 'Documents', desc: 'Déposer et retrouver les fichiers' },
     { icon: '⌘', to: '/liens', module: 'liens', title: 'Liens & outils', desc: 'Tous les outils de l’équipe' },
+    { icon: '🗓', to: '/calendrier', module: 'calendrier', title: 'Calendrier & congés', desc: 'Planning, absences et demandes de congés' },
   ]
 
   const visibleApps = apps.filter((a) => canAccessModule(profile, a.module))

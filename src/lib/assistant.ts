@@ -7,6 +7,7 @@ import type {
   Channel,
   Decision,
   DocumentMeta,
+  Leave,
   LinkItem,
   Message,
   Note,
@@ -29,10 +30,11 @@ export interface AssistantData {
   links: LinkItem[]
   channels: Channel[]
   messages: Message[]
+  leaves: Leave[]
 }
 
 export interface AssistantResult {
-  kind: 'objectif' | 'tache' | 'note' | 'document' | 'decision' | 'process' | 'lien' | 'personne' | 'message'
+  kind: 'objectif' | 'tache' | 'note' | 'document' | 'decision' | 'process' | 'lien' | 'personne' | 'message' | 'conge'
   title: string
   subtitle?: string
   /** Route interne (commence par « / ») ou URL externe (liens outils) */
@@ -54,6 +56,7 @@ export const SHORTCUTS = [
   'Nos outils',
   'Nos process',
   'Objectifs en cours',
+  'Qui est absent ?',
 ]
 
 function normalize(s: string): string {
@@ -163,7 +166,7 @@ function buildIndex(d: AssistantData): Doc[] {
   }
   for (const p of d.profiles) {
     docs.push({
-      result: { kind: 'personne', title: p.full_name, subtitle: `${p.role === 'admin' ? 'Administrateur' : p.role === 'referent' ? 'Référent' : 'Membre'} · ${p.email}`, to: '/organisation' },
+      result: { kind: 'personne', title: p.full_name, subtitle: `${p.role === 'admin' ? 'Administrateur' : p.role === 'referent' ? 'Référent' : 'Membre'} · ${p.email}`, },
       haystackTitle: p.full_name,
       haystackBody: `${p.email} ${p.role}`,
       date: p.created_at,
@@ -181,6 +184,24 @@ function buildIndex(d: AssistantData): Doc[] {
       haystackTitle: '',
       haystackBody: `${m.content} ${name(m.author_id)} ${channel?.name ?? ''}`,
       date: m.created_at,
+    })
+  }
+  const LEAVE_LABELS: Record<string, string> = {
+    conge: 'Congé', maladie: 'Maladie', ecole: 'École', formation: 'Formation',
+    teletravail: 'Télétravail', recup: 'Récup', absence: 'Absence', retard: 'Retard',
+  }
+  for (const l of d.leaves) {
+    if (l.status === 'refusee') continue
+    docs.push({
+      result: {
+        kind: 'conge',
+        title: `${name(l.profile_id) || '—'} — ${LEAVE_LABELS[l.type] ?? l.type}`,
+        subtitle: `Du ${formatDate(l.start_date)} au ${formatDate(l.end_date)} · ${l.status === 'validee' ? 'validé' : 'en attente de validation'}`,
+        to: '/calendrier',
+      },
+      haystackTitle: `${name(l.profile_id)} ${LEAVE_LABELS[l.type] ?? l.type}`,
+      haystackBody: `${l.reason} conge absence ${l.start_date}`,
+      date: l.created_at,
     })
   }
   return docs
@@ -275,6 +296,29 @@ export function answer(question: string, d: AssistantData): AssistantAnswer {
     }
   }
 
+  // ----- Absences / congés
+  if (q.includes('absent') || q.includes('conge') || q.includes('vacance') || q.includes('planning')) {
+    const today = new Date().toISOString().slice(0, 10)
+    const nameOf = (id: string) => d.profiles.find((p) => p.id === id)?.full_name ?? '—'
+    const current = d.leaves.filter((l) => l.status === 'validee' && l.start_date <= today && l.end_date >= today)
+    const upcoming = d.leaves
+      .filter((l) => l.status === 'validee' && l.start_date > today)
+      .sort((a, b) => (a.start_date < b.start_date ? -1 : 1))
+      .slice(0, 6)
+    const toRes = (l: Leave): AssistantResult => ({
+      kind: 'conge',
+      title: `${nameOf(l.profile_id)} — ${l.type === 'conge' ? 'Congé' : l.type}`,
+      subtitle: `Du ${formatDate(l.start_date)} au ${formatDate(l.end_date)}`,
+      to: '/calendrier',
+    })
+    return {
+      text: current.length
+        ? `${current.length} ${plural(current.length, 'personne')} absente(s) aujourd'hui :`
+        : "Personne n'est absent aujourd'hui. Prochaines absences validées :",
+      results: (current.length ? current.map(toRes) : upcoming.map(toRes)),
+    }
+  }
+
   // ----- Qui fait quoi / annuaire
   if (/^qui\b/.test(q) || q.includes('equipe') || q.includes('contact')) {
     const results = search(d, question, ['personne', 'objectif', 'tache'])
@@ -361,4 +405,5 @@ export const KIND_LABELS: Record<AssistantResult['kind'], string> = {
   lien: 'Outil',
   personne: 'Équipe',
   message: 'Message',
+  conge: 'Congé / absence',
 }
