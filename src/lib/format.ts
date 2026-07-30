@@ -6,6 +6,13 @@ export function formatDate(d: string | null | undefined): string {
   return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+export function formatDateTime(d: string | null | undefined): string {
+  if (!d) return '—'
+  const date = new Date(d)
+  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) +
+    ' ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+}
+
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/)
   return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('') || '?'

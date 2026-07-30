@@ -1,10 +1,10 @@
 import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { DEFAULT_LOGO, useBranding } from '../context/BrandingContext'
+import { APP_INFO, useBranding, type AppKey } from '../context/BrandingContext'
 import { useTable } from '../hooks/useTable'
 import { insert, remove, update } from '../lib/data'
 import { MODULES } from '../lib/permissions'
-import type { Objective, Profile } from '../lib/types'
+import type { Objective, Profile, StockAccess } from '../lib/types'
 import { Avatar, Card, EmptyState, Modal } from '../components/ui'
 
 export default function Administration() {
@@ -221,65 +221,78 @@ function CreateEmployeeModal({ instances, onClose, onCreated }: {
 }
 
 function BrandingCard() {
-  const { logoUrl, setLogo, resetLogo } = useBranding()
-  const [busy, setBusy] = useState(false)
+  const { logos, setLogo, resetLogo } = useBranding()
+  const [busy, setBusy] = useState<AppKey | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  async function onFile(e: ChangeEvent<HTMLInputElement>) {
+  async function onFile(app: AppKey, e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    setBusy(true)
+    setBusy(app)
     setMessage(null)
     setError(null)
     try {
-      await setLogo(file)
-      setMessage('Logo mis à jour. Il s’applique immédiatement pour tous les utilisateurs.')
+      await setLogo(app, file)
+      setMessage(`Logo ${APP_INFO[app].name} mis à jour. Il s’applique immédiatement pour tous les utilisateurs.`)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
-  async function onReset() {
-    if (!confirm('Revenir au logo par défaut ?')) return
-    setBusy(true)
+  async function onReset(app: AppKey) {
+    if (!confirm(`Revenir au logo par défaut de ${APP_INFO[app].name} ?`)) return
+    setBusy(app)
     setMessage(null)
     setError(null)
     try {
-      await resetLogo()
-      setMessage('Logo par défaut restauré.')
+      await resetLogo(app)
+      setMessage(`Logo par défaut de ${APP_INFO[app].name} restauré.`)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
+  }
+
+  const descriptions: Record<AppKey, string> = {
+    desk: 'Portail : menu, écran de connexion et onglet du navigateur.',
+    projects: 'Application de pilotage des projets (section du menu).',
+    stock: 'Application de stockage & picking (section du menu).',
   }
 
   return (
-    <Card title="Personnalisation — Logo de l'application">
-      <div className="flex flex-wrap items-center gap-5">
-        <img src={logoUrl} alt="Logo actuel" className="h-20 w-20 rounded-full border border-aura-100 object-contain bg-white" />
-        <div className="flex-1 min-w-60">
-          <p className="text-sm text-aura-700/80 mb-3">
-            Téléversez votre logo (PNG, JPG, SVG ou WebP — idéalement carré, 512×512 px). Il remplace le
-            logo dans le menu, sur l'écran de connexion et dans l'onglet du navigateur, pour tout le monde.
-          </p>
-          <div className="flex flex-wrap items-center gap-3">
-            <label className={`btn-primary cursor-pointer ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
-              {busy ? 'Envoi en cours…' : 'Choisir un fichier…'}
-              <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden" onChange={onFile} disabled={busy} />
-            </label>
-            {logoUrl !== DEFAULT_LOGO && (
-              <button className="btn-secondary" onClick={onReset} disabled={busy}>Revenir au logo par défaut</button>
-            )}
+    <Card title="Personnalisation — Logos des applications">
+      <p className="text-sm text-aura-700/80 mb-4">
+        Chaque application a son logo (PNG, JPG, SVG ou WebP — idéalement carré, 512×512 px).
+        Planet'Stock possède aussi son propre réglage de logo interne (fiches QR et relevés imprimés)
+        dans son onglet Réglages.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {(Object.keys(APP_INFO) as AppKey[]).map((app) => (
+          <div key={app} className="rounded-lg border border-aura-100 p-4 text-center">
+            <img src={logos[app]} alt={APP_INFO[app].name} className="h-16 w-16 mx-auto rounded-full border border-aura-100 object-contain bg-white" />
+            <div className="text-sm font-bold mt-2">{APP_INFO[app].name}</div>
+            <p className="text-[11px] text-aura-700/70 mt-0.5 mb-3">{descriptions[app]}</p>
+            <div className="flex flex-col items-center gap-1.5">
+              <label className={`btn-secondary !px-3 !py-1.5 text-xs cursor-pointer ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
+                {busy === app ? 'Envoi…' : 'Changer le logo'}
+                <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden" onChange={(e) => onFile(app, e)} disabled={busy !== null} />
+              </label>
+              {logos[app] !== APP_INFO[app].defaultLogo && (
+                <button className="text-[11px] text-aura-700 underline" onClick={() => onReset(app)} disabled={busy !== null}>
+                  Logo par défaut
+                </button>
+              )}
+            </div>
           </div>
-          {message && <p className="text-sm text-emerald-700 mt-2">{message}</p>}
-          {error && <p className="text-sm text-coral-600 mt-2">{error}</p>}
-        </div>
+        ))}
       </div>
+      {message && <p className="text-sm text-emerald-700 mt-3">{message}</p>}
+      {error && <p className="text-sm text-coral-600 mt-3">{error}</p>}
     </Card>
   )
 }
@@ -299,6 +312,11 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
   const [allModules, setAllModules] = useState(user.modules === null)
   const [moduleKeys, setModuleKeys] = useState<string[]>(user.modules ?? MODULES.map((m) => m.key))
   const [projects, setProjects] = useState<string[]>(grantedIds)
+  const [stockRole, setStockRole] = useState<'defaut' | StockAccess['role']>(user.stock_access?.role ?? 'defaut')
+  const [stockPerms, setStockPerms] = useState<NonNullable<StockAccess['permissions']>>(
+    user.stock_access?.permissions ?? { entrees: true, sorties: true, espaces: true, facturation: false, compta: false, grille: false },
+  )
+  const [adherentId, setAdherentId] = useState(user.stock_access?.adherent_id ?? '')
   const [busy, setBusy] = useState(false)
 
   // Arbre d'objectifs indenté pour l'affichage.
@@ -325,10 +343,19 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
   async function save() {
     setBusy(true)
     try {
+      const stock_access: StockAccess | null =
+        role === 'admin' || stockRole === 'defaut'
+          ? null
+          : stockRole === 'logisticien'
+            ? { role: 'logisticien', permissions: stockPerms }
+            : stockRole === 'adherent'
+              ? { role: 'adherent', adherent_id: adherentId.trim() || null }
+              : { role: 'admin' }
       await update('profiles', user.id, {
         role,
         instance_id: instanceId || null,
         modules: role === 'admin' || allModules ? null : moduleKeys,
+        stock_access,
       })
       // Synchroniser les projets accordés.
       const existing = memberRows.filter((m) => m.profile_id === user.id)
@@ -385,6 +412,51 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
                     </label>
                   ))}
                   <p className="col-span-2 text-[11px] text-aura-700/60">Le tableau de bord est toujours accessible.</p>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="label">Accès Planet'Stock (stockage & picking)</label>
+              <p className="text-[11px] text-aura-700/60 mb-2">
+                S'applique si le module « Planet'Stock » est coché ci-dessus. « Par défaut » :
+                correspondance par email avec un utilisateur ou adhérent du stock.
+              </p>
+              <select className="input mb-2" value={stockRole} onChange={(e) => setStockRole(e.target.value as typeof stockRole)}>
+                <option value="defaut">Par défaut (correspondance par email)</option>
+                <option value="admin">Administrateur du stock (tout)</option>
+                <option value="logisticien">Logisticien (onglets choisis)</option>
+                <option value="adherent">Adhérent (son espace uniquement)</option>
+              </select>
+              {stockRole === 'logisticien' && (
+                <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-aura-100 p-3">
+                  {([
+                    ['entrees', 'Entrées & références'],
+                    ['sorties', 'Sorties'],
+                    ['espaces', 'Espaces de stockage'],
+                    ['facturation', 'Relevés'],
+                    ['compta', 'Compta matière'],
+                    ['grille', 'Tarifs'],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={!!stockPerms[key]}
+                        onChange={() => setStockPerms((p) => ({ ...p, [key]: !p[key] }))}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              )}
+              {stockRole === 'adherent' && (
+                <div>
+                  <input
+                    className="input"
+                    value={adherentId}
+                    onChange={(e) => setAdherentId(e.target.value)}
+                    placeholder="ID de la fiche adhérent (ex. ADH001) — sinon correspondance par email"
+                  />
                 </div>
               )}
             </div>

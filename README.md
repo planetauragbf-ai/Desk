@@ -1,10 +1,24 @@
-# Planet Aura · Organisation
+# Planet'Desk · Planet Aura
 
-Application de **pilotage organisationnel** pour Planet Aura, inspirée de la méthodologie Eidō Organisations : posez vos objectifs, gérez vos projets, suivez vos plans d'actions, partagez l'information.
+**Planet'Desk** est le bureau numérique unique de Planet Aura : **une seule connexion** donne accès à tout, et l'administrateur (Emma) crée les comptes puis décide, personne par personne, qui accède à quoi dans chaque application.
+
+Planet'Desk héberge :
+
+| Application | Contenu | Logo |
+|---|---|---|
+| **Planet'Projects** | Pilotage : objectifs, plans d'actions, process (workflows), notes, décisions, organisation | personnalisable |
+| **Planet'Stock** | Stockage & picking viticole : références, entrées/sorties, espaces, relevés, compta matière, QR codes | personnalisable |
+| **Espaces communs** | Chat interne, assistant Aura, dépôt de documents, liens & outils | logo du Desk |
+
+Fini les connexions séparées : plus de login propre à Planet'Projects ou Planet'Stock. Le compte Planet'Desk ouvre les deux, avec les droits définis par l'admin (Administration → « Gérer les accès » : modules visibles, projets accordés, rôle et onglets Planet'Stock).
 
 ## Fonctionnalités
 
 - **Tableau de bord** — notifications, suivi de votre plan d'actions (objectifs, tâches, retards, validations), tâches des 14 prochains jours, notes récentes.
+- **Chat interne** — messagerie d'équipe par canaux (temps réel via Supabase Realtime), création de canaux, modération par les administrateurs.
+- **Assistant Aura** — chatbot interactif qui cherche dans **toutes** les données de l'espace (objectifs, tâches, notes, documents, décisions, process, liens, messages, équipe), répond aux questions (« tâches en retard », « où est le cahier des charges ? », « qui s'occupe du site web ? ») et propose des raccourcis.
+- **Liens & outils** — annuaire des applications et raccourcis de l'équipe (Gmail, Drive, Canva…), classés par catégorie, avec recherche.
+- **Planet'Stock** — l'application complète de **stockage & picking** viticole (références, entrées/sorties, espaces, relevés, compta matière, QR codes) est intégrée comme module : mêmes comptes, même projet Supabase, connexion automatique avec la session en cours.
 - **Objectifs** — hiérarchie objectifs / sous-objectifs, fiche complète par objectif avec onglets :
   - *Synthèse* : attendu/livrable, indices de **maîtrise** et de **réalité**, probabilité de résultat, échéances à venir, objectifs liés ;
   - *Plan d'actions* : sous-objectifs, tâches directes, workflows importés ;
@@ -40,7 +54,7 @@ npm run dev        # http://localhost:5173 — mode démo si Supabase n'est pas 
 ### 2. Configurer Supabase (espace partagé multi-utilisateurs)
 
 1. Créez un projet sur [supabase.com](https://supabase.com) (offre gratuite suffisante pour démarrer).
-2. Dans **SQL Editor**, exécutez le contenu de [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) (tables, sécurité RLS, trigger de création de profil).
+2. Dans **SQL Editor**, exécutez les fichiers de [`supabase/migrations/`](supabase/migrations) **dans l'ordre** (`0001_init.sql` → `0008_desk.sql`) : tables, sécurité RLS, trigger de création de profil, chat temps réel, liens & outils, module stock, accès par application.
 3. *(Optionnel)* Exécutez [`supabase/seed.sql`](supabase/seed.sql) pour partir avec des données d'exemple.
 4. Dans **Authentication → Providers**, vérifiez que *Email* est activé. Désactivez « Confirm email » si vous voulez des inscriptions immédiates.
 5. Récupérez dans **Settings → API** : l'URL du projet et la clé `anon public`.
@@ -59,10 +73,26 @@ npm run dev        # http://localhost:5173 — mode démo si Supabase n'est pas 
    - `CLOUDFLARE_ACCOUNT_ID`
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
-3. Poussez sur la branche `main` : le workflow [`deploy.yml`](.github/workflows/deploy.yml) construit l'application et la déploie sur le projet Pages `planet-aura-organisation` (créé automatiquement au premier déploiement).
-4. L'application est servie sur `https://planet-aura-organisation.pages.dev` (domaine personnalisé possible dans le dashboard Cloudflare Pages).
+3. Poussez sur la branche par défaut (ou lancez le workflow manuellement) : [`deploy.yml`](.github/workflows/deploy.yml) construit l'application et la déploie sur le projet Pages **`planet-desk`** (créé automatiquement au premier déploiement).
+4. L'application est servie sur **https://planet-desk.pages.dev** (domaine personnalisé possible, ex. `desk.planetaura.org`, dans le dashboard Cloudflare → Workers & Pages → planet-desk).
 
-Déploiement manuel possible : `npm run build && npx wrangler pages deploy dist --project-name=planet-aura-organisation`.
+Déploiement manuel possible : `npm run build && npx wrangler pages deploy dist --project-name=planet-desk`.
+
+### Un seul projet Supabase pour tout
+
+L'application regroupe **l'organisation, le chat, les documents, l'assistant, les liens ET Planet'Stock** sur un **unique projet Supabase** (les tables cohabitent sans conflit : le stock utilise `app_state` + le bucket `photos`). Plus besoin d'un second projet.
+
+Pour rapatrier les données de l'ancien projet Supabase « Stockage » :
+1. Ancien projet → SQL Editor : `select value from app_state where key = 'pa-stock-clean2';` — copiez le JSON.
+2. Nouveau projet → SQL Editor :
+   ```sql
+   insert into app_state (key, value) values ('pa-stock-clean2', '<coller le JSON>'::jsonb)
+   on conflict (key) do update set value = excluded.value;
+   ```
+3. Les photos du bucket `photos` peuvent être re-téléversées depuis les fiches (ou copiées via Storage → download/upload).
+4. L'ancien projet peut ensuite être supprimé.
+
+Les accès au module se gèrent comme les autres : **Administration → salarié → module « Planet'Stock »**. À l'ouverture du module, la connexion est automatique : correspondance par email avec un utilisateur ou adhérent du stock, et les administrateurs de l'espace interne sont administrateurs du stock.
 
 ### CI
 
@@ -72,7 +102,7 @@ Chaque push sur une branche autre que `main` déclenche [`ci.yml`](.github/workf
 
 ```
 supabase/
-  migrations/0001_init.sql   # schéma complet + RLS + trigger profils + bucket documents
+  migrations/                # schéma + RLS (0001 → 0008 : init, accès, branding, tâches, validation, chat & liens, stock, desk)
   seed.sql                   # données d'exemple (optionnel)
 src/
   lib/

@@ -1,64 +1,93 @@
-// Personnalisation de l'application : logo modifiable depuis la page
-// Administration. Le logo est stocké dans app_settings (URL publique
-// Supabase Storage, ou data-URL en mode démo) et s'applique partout.
+// Personnalisation : chaque application a son logo, modifiable depuis
+// la page Administration. Les logos sont stockés dans app_settings
+// (URL publique Supabase Storage, ou data-URL en mode démo).
+//  - desk     : Planet'Desk (portail, écran de connexion, favicon)
+//  - projects : Planet'Projects (pilotage)
+//  - stock    : Planet'Stock (stockage & picking)
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { insert, list, remove, update } from '../lib/data'
 import { supabase } from '../lib/supabase'
 
-export const DEFAULT_LOGO = '/logo.png'
-const SETTING_KEY = 'logo_url'
+export type AppKey = 'desk' | 'projects' | 'stock'
+
+export const APP_INFO: Record<AppKey, { name: string; settingKey: string; defaultLogo: string }> = {
+  desk: { name: "Planet'Desk", settingKey: 'logo_url', defaultLogo: '/logo.png' },
+  projects: { name: "Planet'Projects", settingKey: 'logo_projects_url', defaultLogo: '/logo-projects.svg' },
+  stock: { name: "Planet'Stock", settingKey: 'logo_stock_url', defaultLogo: '/logo-stock.svg' },
+}
+
+export const DEFAULT_LOGO = APP_INFO.desk.defaultLogo
+
+type Logos = Record<AppKey, string>
 
 interface BrandingState {
+  logos: Logos
+  /** Logo Planet'Desk (compatibilité avec l'existant) */
   logoUrl: string
-  setLogo: (file: File) => Promise<void>
-  resetLogo: () => Promise<void>
+  setLogo: (app: AppKey, file: File) => Promise<void>
+  resetLogo: (app: AppKey) => Promise<void>
+}
+
+const DEFAULT_LOGOS: Logos = {
+  desk: APP_INFO.desk.defaultLogo,
+  projects: APP_INFO.projects.defaultLogo,
+  stock: APP_INFO.stock.defaultLogo,
 }
 
 const BrandingContext = createContext<BrandingState>({
+  logos: DEFAULT_LOGOS,
   logoUrl: DEFAULT_LOGO,
   setLogo: async () => {},
   resetLogo: async () => {},
 })
 
 export function BrandingProvider({ children }: { children: ReactNode }) {
-  const [logoUrl, setLogoUrl] = useState(DEFAULT_LOGO)
+  const [logos, setLogos] = useState<Logos>(DEFAULT_LOGOS)
 
   useEffect(() => {
-    list('app_settings', { key: SETTING_KEY })
+    list('app_settings')
       .then((rows) => {
-        if (rows[0]?.value) setLogoUrl(rows[0].value)
+        setLogos((prev) => {
+          const next = { ...prev }
+          for (const app of Object.keys(APP_INFO) as AppKey[]) {
+            const row = rows.find((r) => r.key === APP_INFO[app].settingKey)
+            if (row?.value) next[app] = row.value
+          }
+          return next
+        })
       })
       .catch(() => {
-        // Table absente (migration non exécutée) : logo par défaut.
+        // Table absente (migration non exécutée) : logos par défaut.
       })
   }, [])
 
-  // Le favicon suit le logo.
+  // Le favicon suit le logo du Desk.
   useEffect(() => {
     const link = document.querySelector<HTMLLinkElement>("link[rel='icon']")
-    if (link) link.href = logoUrl
-  }, [logoUrl])
+    if (link) link.href = logos.desk
+  }, [logos.desk])
 
-  async function saveValue(value: string) {
-    const rows = await list('app_settings', { key: SETTING_KEY })
+  async function saveValue(app: AppKey, value: string) {
+    const key = APP_INFO[app].settingKey
+    const rows = await list('app_settings', { key })
     if (rows[0]) await update('app_settings', rows[0].id, { value, updated_at: new Date().toISOString() })
-    else await insert('app_settings', { key: SETTING_KEY, value, updated_at: new Date().toISOString() })
-    setLogoUrl(value)
+    else await insert('app_settings', { key, value, updated_at: new Date().toISOString() })
+    setLogos((prev) => ({ ...prev, [app]: value }))
   }
 
-  async function setLogo(file: File) {
+  async function setLogo(app: AppKey, file: File) {
     if (!file.type.startsWith('image/')) {
       throw new Error('Choisissez un fichier image (PNG, JPG, SVG ou WebP).')
     }
     if (supabase) {
       const ext = (file.name.split('.').pop() || 'png').toLowerCase()
-      const path = `logo-${Date.now()}.${ext}`
+      const path = `logo-${app}-${Date.now()}.${ext}`
       const { error } = await supabase.storage
         .from('branding')
         .upload(path, file, { upsert: true, cacheControl: '3600', contentType: file.type })
       if (error) throw new Error(error.message)
       const { data } = supabase.storage.from('branding').getPublicUrl(path)
-      await saveValue(data.publicUrl)
+      await saveValue(app, data.publicUrl)
     } else {
       if (file.size > 1_500_000) {
         throw new Error('En mode démo, le logo doit faire moins de 1,5 Mo.')
@@ -69,18 +98,18 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
         reader.onerror = () => reject(new Error('Lecture du fichier impossible.'))
         reader.readAsDataURL(file)
       })
-      await saveValue(dataUrl)
+      await saveValue(app, dataUrl)
     }
   }
 
-  async function resetLogo() {
-    const rows = await list('app_settings', { key: SETTING_KEY })
+  async function resetLogo(app: AppKey) {
+    const rows = await list('app_settings', { key: APP_INFO[app].settingKey })
     if (rows[0]) await remove('app_settings', rows[0].id)
-    setLogoUrl(DEFAULT_LOGO)
+    setLogos((prev) => ({ ...prev, [app]: APP_INFO[app].defaultLogo }))
   }
 
   return (
-    <BrandingContext.Provider value={{ logoUrl, setLogo, resetLogo }}>
+    <BrandingContext.Provider value={{ logos, logoUrl: logos.desk, setLogo, resetLogo }}>
       {children}
     </BrandingContext.Provider>
   )

@@ -11,6 +11,22 @@ export interface Instance {
   created_at: string
 }
 
+/** Droits d'un salarié sur l'application Planet'Stock, définis par l'admin */
+export interface StockAccess {
+  role: 'admin' | 'logisticien' | 'adherent'
+  /** Onglets ouverts pour un logisticien */
+  permissions?: {
+    entrees?: boolean
+    sorties?: boolean
+    espaces?: boolean
+    facturation?: boolean
+    compta?: boolean
+    grille?: boolean
+  }
+  /** Pour un adhérent : identifiant de sa fiche (ADH001…) */
+  adherent_id?: string | null
+}
+
 export interface Profile {
   id: string
   full_name: string
@@ -19,6 +35,8 @@ export interface Profile {
   instance_id: string | null
   /** Modules accessibles ; null = tous les modules */
   modules: string[] | null
+  /** Accès Planet'Stock défini par l'admin ; null = correspondance email / admin */
+  stock_access?: StockAccess | null
   created_at: string
 }
 
@@ -155,6 +173,36 @@ export interface AppSetting {
   updated_at: string
 }
 
+/** Canal de discussion du chat interne */
+export interface Channel {
+  id: string
+  name: string
+  description: string
+  created_by: string | null
+  created_at: string
+}
+
+/** Message posté dans un canal */
+export interface Message {
+  id: string
+  channel_id: string
+  author_id: string | null
+  content: string
+  created_at: string
+}
+
+/** Lien vers un outil, une application ou un raccourci de l'équipe */
+export interface LinkItem {
+  id: string
+  label: string
+  url: string
+  description: string
+  category: string
+  emoji: string
+  author_id: string | null
+  created_at: string
+}
+
 export interface TableRowMap {
   instances: Instance
   profiles: Profile
@@ -170,6 +218,9 @@ export interface TableRowMap {
   decisions: Decision
   indicators: Indicator
   notifications: Notification
+  channels: Channel
+  messages: Message
+  links: LinkItem
 }
 
 export type TableName = keyof TableRowMap

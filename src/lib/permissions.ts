@@ -3,11 +3,15 @@
 import type { Objective, ObjectiveMember, Profile, Task } from './types'
 
 export const MODULES = [
+  { key: 'chat', label: 'Chat interne' },
+  { key: 'assistant', label: 'Assistant' },
   { key: 'objectifs', label: 'Objectifs' },
   { key: 'pilotage', label: 'Pilotage' },
   { key: 'workflows', label: 'Workflows' },
   { key: 'notes', label: 'Notes' },
   { key: 'documents', label: 'Documents' },
+  { key: 'liens', label: 'Liens & outils' },
+  { key: 'stock', label: "Planet'Stock (stockage & picking)" },
   { key: 'organisation', label: 'Organisation' },
 ] as const
 

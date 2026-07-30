@@ -1,8 +1,6 @@
-# Configuration Cloudflare Workers (site statique avec assets)
-# Build Cloudflare : commande de build `npm run build`, déploiement `npx wrangler deploy`.
-name = "planet-aura-organisation"
+# Configuration Cloudflare Pages (site statique)
+# Build : `npm run build` → dist/ ; déploiement : `npx wrangler pages deploy`.
+# URL de l'application : https://planet-desk.pages.dev
+name = "planet-desk"
 compatibility_date = "2026-07-01"
-
-[assets]
-directory = "dist"
-not_found_handling = "single-page-application"
+pages_build_output_dir = "dist"
