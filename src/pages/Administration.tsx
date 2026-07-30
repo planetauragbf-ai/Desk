@@ -34,11 +34,10 @@ export default function Administration() {
         action={<button className="btn-primary" onClick={() => setCreating(true)}>+ Créer un compte salarié</button>}
       >
         <p className="text-sm text-aura-700/80 mb-4">
-          Vous créez ici les comptes de vos salariés : chacun reçoit un email avec un lien pour définir
-          son mot de passe et se connecter. Gérez ensuite leurs accès : rôle, onglets (modules) visibles,
-          et projets accessibles. Un salarié voit automatiquement les projets dont il est référent ou sur
-          lesquels une tâche lui est attribuée ; l'accès à un projet ouvre aussi tous ses sous-objectifs.
-          Les administrateurs voient tout.
+          Vous créez ici les comptes de vos salariés : un <strong>mot de passe provisoire est généré
+          et affiché</strong>, vous le transmettez vous-même, et le salarié doit le changer à sa
+          première connexion. Gérez ensuite leurs accès : rôle, modules visibles, autorisations
+          détaillées, projets et droits Planet'Stock. Les administrateurs voient tout.
         </p>
         {profiles.length === 0 ? (
           <EmptyState>Aucun compte. Les comptes apparaissent ici dès qu'un salarié s'inscrit.</EmptyState>
@@ -129,14 +128,16 @@ function CreateEmployeeModal({ instances, onClose, onCreated }: {
   onClose: () => void
   onCreated: () => void
 }) {
-  const { createEmployee } = useAuth()
+  const { createEmployee, sendPasswordReset } = useAuth()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<Profile['role']>('membre')
   const [instanceId, setInstanceId] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [tempPassword, setTempPassword] = useState<string | null>(null)
+  const [existing, setExisting] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -144,38 +145,100 @@ function CreateEmployeeModal({ instances, onClose, onCreated }: {
     setError(null)
     try {
       const result = await createEmployee(fullName.trim(), email.trim().toLowerCase())
+      if (result.code === 'exists') {
+        setExisting(true)
+        return
+      }
       if (result.error) {
         setError(result.error)
         return
       }
-      // Applique rôle et instance sur le profil créé par le trigger
-      // (petite tolérance au délai de propagation).
+      // Applique rôle, instance et changement de mot de passe obligatoire
+      // sur le profil créé par le trigger (tolérance au délai).
       if (result.userId) {
         for (let i = 0; i < 5; i++) {
           try {
-            await update('profiles', result.userId, { role, instance_id: instanceId || null })
+            await update('profiles', result.userId, { role, instance_id: instanceId || null, must_change_password: true })
             break
           } catch {
             await new Promise((r) => setTimeout(r, 800))
           }
         }
       }
-      setSuccess(true)
+      setTempPassword(result.tempPassword ?? null)
     } finally {
       setBusy(false)
     }
   }
 
-  if (success) {
+  if (existing) {
+    return (
+      <Modal title="Un compte existe déjà pour cet email" onClose={onClose}>
+        <p className="text-sm text-aura-700">
+          <strong>{email}</strong> a déjà un compte de connexion (probablement un ancien compte
+          supprimé : la suppression dans l'application retire le profil et les accès, mais le
+          compte de connexion Supabase subsiste avec son ancien mot de passe).
+        </p>
+        <p className="text-sm text-aura-700 mt-2">Deux possibilités :</p>
+        <ul className="text-sm text-aura-700 list-disc pl-5 mt-1 space-y-1">
+          <li>
+            La personne se connecte avec son <strong>ancien mot de passe</strong> : son profil sera
+            recréé automatiquement, vous réglerez ensuite ses accès ici.
+          </li>
+          <li>
+            Ou envoyez-lui un <strong>lien de réinitialisation</strong> pour qu'elle choisisse un
+            nouveau mot de passe :
+          </li>
+        </ul>
+        {resetSent ? (
+          <p className="text-sm text-emerald-700 mt-3">✔ Email de réinitialisation envoyé à {email}.</p>
+        ) : (
+          <button
+            className="btn-primary mt-3"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              const err = await sendPasswordReset(email)
+              setBusy(false)
+              if (err) setError(err)
+              else setResetSent(true)
+            }}
+          >
+            Envoyer le lien de réinitialisation
+          </button>
+        )}
+        {error && <p className="text-sm text-coral-600 mt-2">{error}</p>}
+        <p className="text-xs text-aura-700/70 mt-3">
+          Pour supprimer définitivement un compte de connexion : Supabase → Authentication → Users →
+          supprimer l'utilisateur. Vous pourrez alors le recréer ici avec un mot de passe provisoire.
+        </p>
+        <div className="flex justify-end mt-4">
+          <button className="btn-secondary" onClick={onClose}>Fermer</button>
+        </div>
+      </Modal>
+    )
+  }
+
+  if (tempPassword) {
     return (
       <Modal title="Compte créé ✔" onClose={onCreated}>
         <p className="text-sm text-aura-700">
-          Le compte de <strong>{fullName}</strong> est créé. Un email vient d'être envoyé à{' '}
-          <strong>{email}</strong> avec un lien pour définir son mot de passe et se connecter.
+          Le compte de <strong>{fullName}</strong> est prêt. Transmettez-lui ces identifiants —
+          <strong> aucun email ne lui a été envoyé</strong>, c'est vous qui avez la main :
         </p>
-        <p className="text-xs text-aura-700/70 mt-2">
-          Si l'email n'arrive pas : vérifiez les spams, ou renvoyez le lien depuis l'écran de
-          connexion (« Mot de passe oublié ou premier accès ? »).
+        <div className="rounded-lg border border-aura-100 bg-aura-50/60 p-4 my-3 space-y-1 font-mono text-sm">
+          <div><span className="text-aura-700/60">Email : </span>{email}</div>
+          <div><span className="text-aura-700/60">Mot de passe provisoire : </span><strong>{tempPassword}</strong></div>
+        </div>
+        <button
+          className="btn-secondary !py-1.5 text-xs"
+          onClick={() => navigator.clipboard?.writeText(`Planet'Desk — https://planet-desk.pages.dev\nEmail : ${email}\nMot de passe provisoire : ${tempPassword}`)}
+        >
+          📋 Copier les identifiants
+        </button>
+        <p className="text-xs text-aura-700/70 mt-3">
+          À sa première connexion, {fullName.split(' ')[0]} devra obligatoirement choisir un mot de
+          passe personnel. Ce mot de passe provisoire ne sera plus affiché : notez-le maintenant.
         </p>
         <div className="flex justify-end mt-4">
           <button className="btn-primary" onClick={onCreated}>Fermer</button>
@@ -213,8 +276,8 @@ function CreateEmployeeModal({ instances, onClose, onCreated }: {
           </div>
         </div>
         <p className="text-xs text-aura-700/70">
-          Le salarié recevra un email avec un lien pour choisir son mot de passe. Vous pourrez ensuite
-          régler ses onglets et projets via « Gérer les accès ».
+          Un <strong>mot de passe provisoire</strong> sera généré et affiché : vous le transmettez
+          vous-même (aucun email automatique). Le salarié devra le changer à sa première connexion.
         </p>
         {error && <p className="text-sm text-coral-600">{error}</p>}
         <div className="flex justify-end gap-2">
@@ -550,7 +613,7 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
               disabled={busy}
               onClick={async () => {
                 if (!confirm(`Supprimer définitivement le compte de ${user.full_name} ?`)) return
-                if (!confirm('Cette action est irréversible (ses attributions de projets et notifications sont supprimées ; ses tâches et documents restent, sans auteur). Confirmer ?')) return
+                if (!confirm("Cette action est irréversible (ses attributions et notifications sont supprimées ; ses tâches et documents restent, sans auteur). NOTE : son compte de connexion Supabase subsiste — pour l'effacer aussi, supprimez l'utilisateur dans Supabase → Authentication → Users. Confirmer ?")) return
                 setBusy(true)
                 try {
                   await remove('profiles', user.id)

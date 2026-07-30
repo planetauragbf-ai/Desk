@@ -54,6 +54,8 @@ export interface Profile {
   perms?: DetailedPerms | null
   /** Service compta : valide les congés après l'admin */
   is_compta?: boolean
+  /** Doit changer son mot de passe provisoire à la première connexion */
+  must_change_password?: boolean
   /** Droits de congés payés annuels (jours) */
   cp_droits?: number
   created_at: string

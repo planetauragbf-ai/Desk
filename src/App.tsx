@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import type { ReactNode } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import Layout from './components/Layout'
 import { useAuth } from './context/AuthContext'
 import { canAccessModule, type ModuleKey } from './lib/permissions'
@@ -27,6 +27,55 @@ function Guard({ module, children }: { module: ModuleKey; children: ReactNode })
   const { profile } = useAuth()
   if (!canAccessModule(profile, module)) return <Navigate to="/tableau-de-bord" replace />
   return <>{children}</>
+}
+
+/** Première connexion : changement obligatoire du mot de passe provisoire. */
+function ForcePasswordScreen() {
+  const { profile, completeForcedPasswordChange, signOut } = useAuth()
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (password.length < 8) return setError('8 caractères minimum.')
+    if (password !== confirm) return setError('Les deux mots de passe ne correspondent pas.')
+    setBusy(true)
+    try {
+      const err = await completeForcedPasswordChange(password)
+      if (err) setError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-sand p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl border border-aura-100">
+        <h1 className="text-xl font-extrabold text-aura-950">Bienvenue {profile?.full_name?.split(' ')[0]} 👋</h1>
+        <p className="text-sm text-aura-700 mt-1 mb-5">
+          Votre mot de passe provisoire doit être remplacé par un mot de passe personnel avant de continuer.
+        </p>
+        <form onSubmit={onSubmit} className="space-y-3">
+          <div>
+            <label className="label">Nouveau mot de passe (8 caractères min.)</label>
+            <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+          </div>
+          <div>
+            <label className="label">Confirmez le mot de passe</label>
+            <input type="password" className="input" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
+          </div>
+          {error && <p className="text-sm text-coral-600">{error}</p>}
+          <button type="submit" className="btn-primary w-full justify-center" disabled={busy}>
+            {busy ? 'Enregistrement…' : 'Définir mon mot de passe et entrer'}
+          </button>
+        </form>
+        <button className="mt-4 text-xs text-aura-700 underline" onClick={signOut}>Se déconnecter</button>
+      </div>
+    </div>
+  )
 }
 
 /** Écran affiché quand l'admin a désactivé l'accès du salarié. */
@@ -63,6 +112,8 @@ export default function App() {
   if (!profile) return <Login />
 
   if (profile.disabled) return <DisabledScreen />
+
+  if (profile.must_change_password) return <ForcePasswordScreen />
 
   return (
     <Routes>
