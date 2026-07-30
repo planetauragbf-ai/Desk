@@ -162,6 +162,8 @@ function seed(): Db {
     audit_log: [],
     channel_members: [],
     time_entries: [],
+    claims: [],
+    claim_events: [],
     poll_votes: [],
     leaves: [
       { id: uid(), profile_id: users.lea, type: 'conge', start_date: day(10), end_date: day(14), reason: 'Congés été', status: 'validee', admin_by: users.admin, admin_at: iso(-2), compta_by: users.admin, compta_at: iso(-1), refusal_reason: '', created_at: iso(-4) },

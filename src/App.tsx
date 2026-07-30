@@ -21,7 +21,7 @@ import LinksPage from './pages/LinksPage'
 import StockPage from './pages/StockPage'
 import DashPage from './pages/DashPage'
 import CalendarPage from './pages/CalendarPage'
-import ComingSoonPage from './pages/ComingSoonPage'
+import ClaimPage from './pages/ClaimPage'
 
 function Guard({ module, children }: { module: ModuleKey; children: ReactNode }) {
   const { profile } = useAuth()
@@ -126,7 +126,7 @@ export default function App() {
         <Route path="/stock/*" element={<Guard module="stock"><StockPage /></Guard>} />
         <Route path="/dash" element={<Guard module="dash"><DashPage /></Guard>} />
         <Route path="/calendrier" element={<Guard module="calendrier"><CalendarPage /></Guard>} />
-        <Route path="/claim" element={<Guard module="claim"><ComingSoonPage app="claim" /></Guard>} />
+        <Route path="/claim" element={<Guard module="claim"><ClaimPage /></Guard>} />
         <Route path="/projets" element={<ProjectsDashboard />} />
         <Route path="/objectifs" element={<Guard module="objectifs"><Objectives /></Guard>} />
         <Route path="/objectifs/:id" element={<Guard module="objectifs"><ObjectiveDetail /></Guard>} />
