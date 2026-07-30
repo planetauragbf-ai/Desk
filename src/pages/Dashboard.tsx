@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useBranding } from '../context/BrandingContext'
 import { canAccessModule, type ModuleKey } from '../lib/permissions'
@@ -52,6 +52,12 @@ export default function Dashboard() {
 
   const visibleApps = apps.filter((a) => canAccessModule(profile, a.module))
   const visibleSpaces = spaces.filter((s) => canAccessModule(profile, s.module))
+
+  // Un compte limité à Planet'Stock (ex. adhérent) arrive directement
+  // dans son espace, sans passer par l'accueil.
+  if (visibleSpaces.length === 0 && visibleApps.length === 1 && visibleApps[0].to === '/stock') {
+    return <Navigate to="/stock" replace />
+  }
 
   return (
     <div className="space-y-6">

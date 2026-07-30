@@ -42,12 +42,19 @@ const CLAIM_NAV: NavItem[] = [
   { to: '/claim', label: 'Gestion des sinistres', icon: '🛡', module: 'claim' },
 ]
 
+/** Groupe d'items du bandeau ; label null = items affichés directement. */
+interface NavGroup {
+  label: string | null
+  items: NavItem[]
+}
+
 /**
  * Sous-menu Planet'Stock : les onglets de l'application, directement dans
- * le bandeau gauche (l'app n'ouvre plus son propre menu). La liste dépend
- * des droits stock du salarié définis par l'admin.
+ * le bandeau gauche et regroupés par catégorie (Opérations, Facturation,
+ * Administration), chacune repliable. La liste dépend des droits stock du
+ * salarié définis par l'admin.
  */
-function stockNav(profile: Profile | null): NavItem[] {
+function stockNav(profile: Profile | null): NavGroup[] {
   const t = (id: string, label: string, icon: string): NavItem => ({
     to: `/stock?onglet=${id}`,
     label,
@@ -57,22 +64,23 @@ function stockNav(profile: Profile | null): NavItem[] {
   const acc = profile?.stock_access ?? null
   const role = acc?.role ?? (profile?.role === 'admin' ? 'admin' : null)
 
-  if (role === 'adherent') return [t('adherent', 'Mon espace', '👤')]
+  if (role === 'adherent') return [{ label: null, items: [t('adherent', 'Mon espace', '👤')] }]
 
   if (role === 'admin') {
     return [
-      t('dashboard', 'Dashboard', '📊'),
-      t('adherents', 'Adhérents', '👥'),
-      t('entrees', 'Entrées', '📥'),
-      t('references', 'Références', '🍷'),
-      t('sorties', 'Sorties', '📤'),
-      t('espaces', 'Espaces', '🗄'),
-      t('facturation', 'Relevés', '🧾'),
-      t('compta', 'Compta matière', '⚖'),
-      t('grille', 'Tarifs', '📋'),
-      t('journal', 'Journal', '📝'),
-      t('users', 'Utilisateurs', '🔐'),
-      t('reglages', 'Réglages', '⚙'),
+      { label: null, items: [t('dashboard', 'Dashboard', '📊')] },
+      {
+        label: 'Opérations',
+        items: [t('entrees', 'Entrées', '📥'), t('references', 'Références', '🍷'), t('sorties', 'Sorties', '📤'), t('espaces', 'Espaces', '🗄')],
+      },
+      {
+        label: 'Facturation',
+        items: [t('facturation', 'Relevés', '🧾'), t('compta', 'Compta matière', '⚖'), t('grille', 'Tarifs', '📋')],
+      },
+      {
+        label: 'Administration',
+        items: [t('adherents', 'Adhérents', '👥'), t('users', 'Utilisateurs', '🔐'), t('journal', 'Journal', '📝'), t('reglages', 'Réglages', '⚙')],
+      },
     ]
   }
 
@@ -80,15 +88,19 @@ function stockNav(profile: Profile | null): NavItem[] {
   // n'affiche que les onglets autorisés.
   const p = acc?.role === 'logisticien' ? acc.permissions ?? {} : null
   const ok = (k: keyof NonNullable<typeof p>) => p === null || !!p[k]
-  const items = [t('dashboard', 'Dashboard', '📊')]
-  if (ok('entrees')) items.push(t('entrees', 'Entrées', '📥'), t('references', 'Références', '🍷'))
-  if (ok('sorties')) items.push(t('sorties', 'Sorties', '📤'))
-  if (ok('espaces')) items.push(t('espaces', 'Espaces', '🗄'))
-  if (ok('facturation')) items.push(t('facturation', 'Relevés', '🧾'))
-  if (ok('compta')) items.push(t('compta', 'Compta matière', '⚖'))
-  if (ok('grille')) items.push(t('grille', 'Tarifs', '📋'))
-  items.push(t('journal', 'Journal', '📝'))
-  return items
+  const operations: NavItem[] = []
+  if (ok('entrees')) operations.push(t('entrees', 'Entrées', '📥'), t('references', 'Références', '🍷'))
+  if (ok('sorties')) operations.push(t('sorties', 'Sorties', '📤'))
+  if (ok('espaces')) operations.push(t('espaces', 'Espaces', '🗄'))
+  const facturation: NavItem[] = []
+  if (ok('facturation')) facturation.push(t('facturation', 'Relevés', '🧾'))
+  if (ok('compta')) facturation.push(t('compta', 'Compta matière', '⚖'))
+  if (ok('grille')) facturation.push(t('grille', 'Tarifs', '📋'))
+  const groups: NavGroup[] = [{ label: null, items: [t('dashboard', 'Dashboard', '📊')] }]
+  if (operations.length) groups.push({ label: 'Opérations', items: operations })
+  if (facturation.length) groups.push({ label: 'Facturation', items: facturation })
+  groups.push({ label: 'Suivi', items: [t('journal', 'Journal', '📝')] })
+  return groups
 }
 
 function usePersistedBool(key: string, initial: boolean): [boolean, (v: boolean) => void] {
@@ -150,22 +162,43 @@ function NavItems({ items, mini }: { items: NavItem[]; mini: boolean }) {
   )
 }
 
-function AppSection({ logo, label, items, mini, storageKey }: {
+/** Sous-catégorie repliable à l'intérieur d'une section d'application. */
+function SubGroup({ label, items, storageKey }: { label: string; items: NavItem[]; storageKey: string }) {
+  const [open, setOpen] = usePersistedBool(storageKey, true)
+  return (
+    <div className="pl-2">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-1.5 px-3 pt-2 pb-1 group"
+        aria-expanded={open}
+      >
+        <span className={`text-aura-700/40 text-[9px] transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-aura-700/50 group-hover:text-aura-700">
+          {label}
+        </span>
+      </button>
+      {open && <NavItems items={items} mini={false} />}
+    </div>
+  )
+}
+
+function AppSection({ logo, label, groups, mini, storageKey }: {
   logo: string
   label: string
-  items: NavItem[]
+  groups: NavGroup[]
   mini: boolean
   storageKey: string
 }) {
   const [open, setOpen] = usePersistedBool(storageKey, true)
-  if (items.length === 0) return null
+  const allItems = groups.flatMap((g) => g.items)
+  if (allItems.length === 0) return null
   if (mini) {
     return (
       <>
         <div className="flex justify-center pt-4 pb-1" title={label}>
           <img src={logo} alt={label} className="h-6 w-6 rounded-full border border-aura-100 bg-white object-contain" />
         </div>
-        <NavItems items={items} mini />
+        <NavItems items={allItems} mini />
       </>
     )
   }
@@ -182,7 +215,14 @@ function AppSection({ logo, label, items, mini, storageKey }: {
         </span>
         <span className={`ml-auto text-aura-700/50 text-[10px] transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
       </button>
-      {open && <NavItems items={items} mini={false} />}
+      {open &&
+        groups.map((g, i) =>
+          g.label === null ? (
+            <NavItems key={i} items={g.items} mini={false} />
+          ) : (
+            <SubGroup key={g.label} label={g.label} items={g.items} storageKey={`${storageKey}-${g.label}`} />
+          ),
+        )}
     </>
   )
 }
@@ -198,7 +238,9 @@ export default function Layout() {
   const deskItems = visible(DESK_NAV)
   const projectItems = visible(PROJECTS_NAV)
   const dashItems = visible(DASH_NAV)
-  const stockItems = visible(stockNav(profile))
+  const stockGroups = stockNav(profile)
+    .map((g) => ({ ...g, items: visible(g.items) }))
+    .filter((g) => g.items.length > 0)
   const claimItems = visible(CLAIM_NAV)
   // Planet'Stock embarque son propre fond : pleine largeur, sans marges.
   const fullBleed = pathname.startsWith('/stock')
@@ -223,10 +265,10 @@ export default function Layout() {
         <nav className={`flex-1 space-y-1 overflow-y-auto pb-4 ${collapsed ? 'px-2' : 'px-3'}`}>
           <NavItems items={deskItems} mini={collapsed} />
 
-          <AppSection logo={logos.projects} label="Planet’Projects" items={projectItems.length > 1 ? projectItems : []} mini={collapsed} storageKey="desk-nav-projects" />
-          <AppSection logo={logos.dash} label="Planet’Dash" items={dashItems} mini={collapsed} storageKey="desk-nav-dash" />
-          <AppSection logo={logos.stock} label="Planet’Stock" items={stockItems} mini={collapsed} storageKey="desk-nav-stock" />
-          <AppSection logo={logos.claim} label="Planet’Claim" items={claimItems} mini={collapsed} storageKey="desk-nav-claim" />
+          <AppSection logo={logos.projects} label="Planet’Projects" groups={[{ label: null, items: projectItems.length > 1 ? projectItems : [] }]} mini={collapsed} storageKey="desk-nav-projects" />
+          <AppSection logo={logos.dash} label="Planet’Dash" groups={[{ label: null, items: dashItems }]} mini={collapsed} storageKey="desk-nav-dash" />
+          <AppSection logo={logos.stock} label="Planet’Stock" groups={stockGroups} mini={collapsed} storageKey="desk-nav-stock" />
+          <AppSection logo={logos.claim} label="Planet’Claim" groups={[{ label: null, items: claimItems }]} mini={collapsed} storageKey="desk-nav-claim" />
 
           {profile?.role === 'admin' && (
             <>
