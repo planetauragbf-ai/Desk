@@ -5,6 +5,7 @@ import { useAuth } from './context/AuthContext'
 import { canAccessModule, type ModuleKey } from './lib/permissions'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import ProjectsDashboard from './pages/ProjectsDashboard'
 import Objectives from './pages/Objectives'
 import ObjectiveDetail from './pages/ObjectiveDetail'
 import Pilotage from './pages/Pilotage'
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/assistant" element={<Guard module="assistant"><AssistantPage /></Guard>} />
         <Route path="/liens" element={<Guard module="liens"><LinksPage /></Guard>} />
         <Route path="/stock/*" element={<Guard module="stock"><StockPage /></Guard>} />
+        <Route path="/projets" element={<ProjectsDashboard />} />
         <Route path="/objectifs" element={<Guard module="objectifs"><Objectives /></Guard>} />
         <Route path="/objectifs/:id" element={<Guard module="objectifs"><ObjectiveDetail /></Guard>} />
         <Route path="/pilotage" element={<Guard module="pilotage"><Pilotage /></Guard>} />

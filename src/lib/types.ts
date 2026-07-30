@@ -191,6 +191,14 @@ export interface Message {
   created_at: string
 }
 
+/** Dossier des espaces Documents ('documents') et Liens & outils ('liens') */
+export interface Folder {
+  id: string
+  kind: 'documents' | 'liens'
+  name: string
+  created_at: string
+}
+
 /** Lien vers un outil, une application ou un raccourci de l'équipe */
 export interface LinkItem {
   id: string
@@ -221,6 +229,7 @@ export interface TableRowMap {
   channels: Channel
   messages: Message
   links: LinkItem
+  folders: Folder
 }
 
 export type TableName = keyof TableRowMap
