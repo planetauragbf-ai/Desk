@@ -1,0 +1,4 @@
+# Configuration Cloudflare Pages (déploiement manuel : `npx wrangler pages deploy dist`)
+name = "planet-aura-organisation"
+compatibility_date = "2026-07-01"
+pages_build_output_dir = "dist"
