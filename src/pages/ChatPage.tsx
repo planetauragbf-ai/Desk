@@ -37,7 +37,7 @@ export default function ChatPage() {
   const [showPoll, setShowPoll] = useState(false)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
-  const endRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
 
   const { rows: allChannels, refresh: refreshChannels } = useTable('channels', undefined, { column: 'created_at', ascending: true })
   const { rows: members, refresh: refreshMembers } = useTable('channel_members')
@@ -81,8 +81,10 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId])
 
+  // Défilement du fil de messages uniquement (jamais de la page entière).
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = listRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [messages.length, channelId])
 
   const grouped = useMemo(() => {
@@ -307,7 +309,7 @@ export default function ChatPage() {
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto space-y-4 pr-1" style={{ maxHeight: '55vh' }}>
+              <div ref={listRef} className="flex-1 overflow-y-auto space-y-4 pr-1" style={{ maxHeight: '55vh' }}>
                 {grouped.length === 0 && <EmptyState>Aucun message pour le moment. Lancez la conversation !</EmptyState>}
                 {grouped.map((g) => (
                   <div key={g.items[0].id} className="flex gap-2.5">
@@ -333,7 +335,6 @@ export default function ChatPage() {
                     </div>
                   </div>
                 ))}
-                <div ref={endRef} />
               </div>
 
               <form onSubmit={sendMessage} className="mt-3 flex gap-2 border-t border-aura-100 pt-3">
