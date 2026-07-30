@@ -4,7 +4,7 @@ import { useTable } from '../hooks/useTable'
 import { insert, remove, update } from '../lib/data'
 import { notify } from '../lib/notify'
 import { formatDate } from '../lib/format'
-import type { Leave, LeaveStatus, LeaveType } from '../lib/types'
+import type { Leave, LeaveStatus, LeaveType, TimeEntry } from '../lib/types'
 import { Card, EmptyState, Modal } from '../components/ui'
 
 // Types alignés sur le planning salariés (P/C/M/E/FORM/TT/RC…)
@@ -44,9 +44,11 @@ export default function CalendarPage() {
   })
   const [showNew, setShowNew] = useState(false)
   const [editCell, setEditCell] = useState<{ profileId: string; date: string } | null>(null)
+  const [showTime, setShowTime] = useState(false)
 
   const { rows: leaves, refresh } = useTable('leaves', undefined, { column: 'created_at', ascending: false })
   const { rows: profiles } = useTable('profiles', undefined, { column: 'full_name', ascending: true })
+  const { rows: timeEntries, refresh: refreshTime } = useTable('time_entries', undefined, { column: 'date', ascending: false })
 
   const isAdmin = profile?.role === 'admin'
   const isCompta = !!profile?.is_compta
@@ -196,6 +198,30 @@ export default function CalendarPage() {
 
   const personName = (id: string | null) => profiles.find((p) => p.id === id)?.full_name ?? '—'
 
+  // ---- Heures supp & retards (à la minute), pour le mois affiché ----
+  const monthPrefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`
+  const monthEntries = timeEntries.filter((e) => e.date.startsWith(monthPrefix))
+  const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`)
+  const totalFor = (profileId: string, kind: TimeEntry['kind']) =>
+    monthEntries.filter((e) => e.profile_id === profileId && e.kind === kind).reduce((s, e) => s + e.minutes, 0)
+
+  async function addTimeEntry(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    const minutes = Number(fd.get('hours') || 0) * 60 + Number(fd.get('minutes') || 0)
+    if (minutes <= 0) return alert('Indiquez une durée.')
+    await insert('time_entries', {
+      profile_id: canEditPlanning ? String(fd.get('profile_id')) || profile!.id : profile!.id,
+      kind: String(fd.get('kind')) as TimeEntry['kind'],
+      date: String(fd.get('date')),
+      minutes,
+      note: String(fd.get('note') ?? ''),
+      created_by: profile?.id ?? null,
+    })
+    setShowTime(false)
+    refreshTime()
+  }
+
   function ValidationList({ items, stage }: { items: Leave[]; stage: 'admin' | 'compta' }) {
     if (items.length === 0) return <EmptyState>Aucune demande en attente.</EmptyState>
     return (
@@ -322,6 +348,63 @@ export default function CalendarPage() {
         </div>
       </Card>
 
+      <Card
+        title={<span>⏱ Heures supp & retards — <span className="capitalize">{monthName(month)}</span></span>}
+        action={<button className="btn-primary !px-3 !py-1.5 text-xs" onClick={() => setShowTime(true)}>+ Ajouter</button>}
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[420px]">
+            <thead>
+              <tr>
+                <th className="table-head rounded-l-lg text-left">Salarié</th>
+                <th className="table-head text-right">Heures supp</th>
+                <th className="table-head rounded-r-lg text-right">Retards</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeProfiles
+                .filter((p) => totalFor(p.id, 'hsupp') > 0 || totalFor(p.id, 'retard') > 0)
+                .map((p) => (
+                  <tr key={p.id}>
+                    <td className="table-cell text-xs font-semibold">{p.full_name}</td>
+                    <td className="table-cell text-right text-emerald-700 font-semibold">
+                      {totalFor(p.id, 'hsupp') ? `+ ${fmtMin(totalFor(p.id, 'hsupp'))}` : '—'}
+                    </td>
+                    <td className="table-cell text-right text-coral-600 font-semibold">
+                      {totalFor(p.id, 'retard') ? fmtMin(totalFor(p.id, 'retard')) : '—'}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+          {monthEntries.length === 0 && <EmptyState>Aucune heure supp ni retard saisi ce mois-ci.</EmptyState>}
+        </div>
+        {monthEntries.length > 0 && (
+          <div className="mt-3 border-t border-aura-100 pt-3">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-aura-700/60 mb-1.5">Détail du mois</div>
+            <ul className="space-y-1">
+              {monthEntries.map((e) => (
+                <li key={e.id} className="flex items-center gap-2 text-xs border-b border-aura-100/60 pb-1 last:border-0">
+                  <span className="w-20 text-aura-700/70">{formatDate(e.date)}</span>
+                  <span className="font-semibold">{personName(e.profile_id)}</span>
+                  <span className={e.kind === 'hsupp' ? 'text-emerald-700' : 'text-coral-600'}>
+                    {e.kind === 'hsupp' ? `+ ${fmtMin(e.minutes)} supp` : `retard ${fmtMin(e.minutes)}`}
+                  </span>
+                  {e.note && <span className="text-aura-700/60 truncate">· {e.note}</span>}
+                  {(canEditPlanning || e.profile_id === profile?.id) && (
+                    <button
+                      className="ml-auto text-coral-600/70 hover:text-coral-600"
+                      onClick={async () => { if (confirm('Supprimer cette saisie ?')) { await remove('time_entries', e.id); refreshTime() } }}
+                      aria-label="Supprimer"
+                    >🗑</button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Card>
+
       <div className="grid lg:grid-cols-1 gap-5">
         <Card title="Mes demandes">
           {myLeaves.length === 0 ? (
@@ -381,6 +464,52 @@ export default function CalendarPage() {
             La saisie directe est validée immédiatement (admin / compta). « Présence » retire l'absence
             existante sur cette journée.
           </p>
+        </Modal>
+      )}
+
+      {showTime && (
+        <Modal title="Heures supp / retard (à la minute)" onClose={() => setShowTime(false)}>
+          <form onSubmit={addTimeEntry} className="space-y-3">
+            {canEditPlanning && (
+              <div>
+                <label className="label">Salarié</label>
+                <select name="profile_id" className="input" defaultValue={profile?.id}>
+                  {activeProfiles.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Type *</label>
+                <select name="kind" className="input" required defaultValue="hsupp">
+                  <option value="hsupp">Heures supplémentaires</option>
+                  <option value="retard">Retard</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Date *</label>
+                <input type="date" name="date" className="input" required defaultValue={new Date().toISOString().slice(0, 10)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Heures</label>
+                <input type="number" name="hours" className="input" min={0} defaultValue={0} />
+              </div>
+              <div>
+                <label className="label">Minutes</label>
+                <input type="number" name="minutes" className="input" min={0} max={59} defaultValue={0} />
+              </div>
+            </div>
+            <div>
+              <label className="label">Note</label>
+              <input name="note" className="input" placeholder="ex. préparation salon, panne de train…" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setShowTime(false)}>Annuler</button>
+              <button type="submit" className="btn-primary">Enregistrer</button>
+            </div>
+          </form>
         </Modal>
       )}
 

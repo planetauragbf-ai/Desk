@@ -45,17 +45,27 @@ export default function ChatPage() {
   const { rows: votes, refresh: refreshVotes } = useTable('poll_votes')
 
   // Canaux visibles : publics + privés dont je suis membre (admins : tous).
+  // Messages privés (dm) : UNIQUEMENT leurs membres — pas les admins.
   const channels = useMemo(
     () =>
-      allChannels.filter(
-        (c) =>
-          !c.private ||
-          profile?.role === 'admin' ||
-          c.created_by === profile?.id ||
-          members.some((m) => m.channel_id === c.id && m.profile_id === profile?.id),
-      ),
+      allChannels.filter((c) => {
+        const isMember = members.some((m) => m.channel_id === c.id && m.profile_id === profile?.id)
+        if (c.dm) return isMember || c.created_by === profile?.id
+        return !c.private || profile?.role === 'admin' || c.created_by === profile?.id || isMember
+      }),
     [allChannels, members, profile],
   )
+  const canaux = useMemo(() => channels.filter((c) => !c.dm), [channels])
+  const dms = useMemo(() => channels.filter((c) => c.dm), [channels])
+
+  /** Nom d'affichage d'une conversation privée : nom du groupe ou noms des autres membres. */
+  const dmName = (c: Channel) => {
+    if (c.name) return c.name
+    const others = members
+      .filter((m) => m.channel_id === c.id && m.profile_id !== profile?.id)
+      .map((m) => profileName(profiles, m.profile_id))
+    return others.join(', ') || 'Conversation'
+  }
 
   const channelId = params.get('canal') ?? channels[0]?.id ?? null
   const channel = channels.find((c) => c.id === channelId) ?? null
@@ -97,7 +107,47 @@ export default function ChatPage() {
     return groups
   }, [messages])
 
-  const canManageChannel = (c: Channel) => profile?.role === 'admin' || c.created_by === profile?.id
+  const canManageChannel = (c: Channel) =>
+    c.created_by === profile?.id || (!c.dm && profile?.role === 'admin')
+
+  const [showNewDm, setShowNewDm] = useState(false)
+
+  async function createDm(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    const memberIds = fd.getAll('members').map(String)
+    const groupName = String(fd.get('name') ?? '').trim()
+    if (memberIds.length === 0) {
+      alert('Choisissez au moins une personne.')
+      return
+    }
+    // Conversation à deux déjà existante → on l'ouvre au lieu d'en recréer une.
+    if (memberIds.length === 1 && !groupName) {
+      const other = memberIds[0]
+      const existing = dms.find((c) => {
+        const ids = members.filter((m) => m.channel_id === c.id).map((m) => m.profile_id)
+        return ids.length === 2 && ids.includes(other) && ids.includes(profile?.id ?? '')
+      })
+      if (existing) {
+        setShowNewDm(false)
+        setParams({ canal: existing.id })
+        return
+      }
+    }
+    const created = await insert('channels', {
+      name: groupName,
+      description: '',
+      created_by: profile?.id ?? null,
+      private: true,
+      dm: true,
+    })
+    const ids = new Set([...memberIds, profile?.id ?? ''])
+    await Promise.all([...ids].filter(Boolean).map((id) => insert('channel_members', { channel_id: created.id, profile_id: id })))
+    setShowNewDm(false)
+    refreshChannels()
+    refreshMembers()
+    setParams({ canal: created.id })
+  }
 
   async function sendMessage(e: FormEvent) {
     e.preventDefault()
@@ -271,12 +321,13 @@ export default function ChatPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-5 items-start">
-        <Card title="Canaux" className="md:sticky md:top-6">
-          {channels.length === 0 ? (
-            <EmptyState>Aucun canal. Créez le premier !</EmptyState>
+        <Card className="md:sticky md:top-6">
+          <h2 className="text-sm font-bold text-aura-900 mb-2">Canaux</h2>
+          {canaux.length === 0 ? (
+            <EmptyState>Aucun canal.</EmptyState>
           ) : (
             <div className="space-y-1">
-              {channels.map((c) => (
+              {canaux.map((c) => (
                 <button
                   key={c.id}
                   onClick={() => setParams({ canal: c.id })}
@@ -289,6 +340,28 @@ export default function ChatPage() {
               ))}
             </div>
           )}
+
+          <div className="flex items-center justify-between mt-4 mb-2">
+            <h2 className="text-sm font-bold text-aura-900">Messages privés</h2>
+            <button className="text-accent-500 text-lg leading-none font-bold" title="Nouveau message privé" onClick={() => setShowNewDm(true)}>+</button>
+          </div>
+          {dms.length === 0 ? (
+            <p className="text-xs text-aura-700/60">Discutez en privé, à deux ou en groupe, avec « + ».</p>
+          ) : (
+            <div className="space-y-1">
+              {dms.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setParams({ canal: c.id })}
+                  className={`w-full text-left rounded-lg px-3 py-2 text-sm font-medium transition-colors truncate ${
+                    c.id === channelId ? 'bg-aura-800 text-white' : 'text-aura-800 hover:bg-aura-50'
+                  }`}
+                >
+                  👥 {dmName(c)}
+                </button>
+              ))}
+            </div>
+          )}
         </Card>
 
         <Card className="flex flex-col min-h-[60vh]">
@@ -296,7 +369,9 @@ export default function ChatPage() {
             <>
               <div className="border-b border-aura-100 pb-3 mb-3 flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-bold">{channel.private ? '🔒' : '#'} {channel.name}</h2>
+                  <h2 className="text-sm font-bold">
+                    {channel.dm ? `👥 ${dmName(channel)}` : `${channel.private ? '🔒' : '#'} ${channel.name}`}
+                  </h2>
                   {channel.description && <p className="text-xs text-aura-700/70 mt-0.5">{channel.description}</p>}
                   {channel.private && (
                     <p className="text-[11px] text-aura-700/60 mt-0.5">
@@ -345,7 +420,7 @@ export default function ChatPage() {
                 <button type="button" className="btn-secondary !px-3" title="Créer un questionnaire" onClick={() => setShowPoll(true)}>📊</button>
                 <input
                   className="input flex-1"
-                  placeholder={`Écrire dans ${channel.private ? '🔒' : '#'}${channel.name}…`}
+                  placeholder={channel.dm ? `Écrire à ${dmName(channel)}…` : `Écrire dans ${channel.private ? '🔒' : '#'}${channel.name}…`}
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                 />
@@ -393,8 +468,37 @@ export default function ChatPage() {
         </Modal>
       )}
 
+      {showNewDm && (
+        <Modal title="Nouveau message privé" onClose={() => setShowNewDm(false)}>
+          <form onSubmit={createDm} className="space-y-3">
+            <div>
+              <label className="label">Avec qui ? *</label>
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-aura-100 p-3 space-y-1.5">
+                {profiles.filter((p) => !p.disabled && p.id !== profile?.id).map((p) => (
+                  <label key={p.id} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="members" value={p.id} />
+                    {p.full_name}
+                  </label>
+                ))}
+              </div>
+              <p className="text-[11px] text-aura-700/60 mt-1">
+                Une personne = discussion à deux · plusieurs = groupe. Personne d'autre ne voit la conversation.
+              </p>
+            </div>
+            <div>
+              <label className="label">Nom du groupe (optionnel)</label>
+              <input name="name" className="input" placeholder="ex. Équipe événement — sinon les prénoms s'affichent" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setShowNewDm(false)}>Annuler</button>
+              <button type="submit" className="btn-primary">Démarrer la conversation</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
       {managing && (
-        <Modal title={`Gérer ${managing.private ? '🔒' : '#'}${managing.name}`} onClose={() => setManaging(null)}>
+        <Modal title={managing.dm ? `Gérer 👥 ${dmName(managing)}` : `Gérer ${managing.private ? '🔒' : '#'}${managing.name}`} onClose={() => setManaging(null)}>
           <div className="space-y-4">
             {managing.private ? (
               <div>

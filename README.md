@@ -54,7 +54,7 @@ npm run dev        # http://localhost:5173 — mode démo si Supabase n'est pas 
 ### 2. Configurer Supabase (espace partagé multi-utilisateurs)
 
 1. Créez un projet sur [supabase.com](https://supabase.com) (offre gratuite suffisante pour démarrer).
-2. Dans **SQL Editor**, exécutez les fichiers de [`supabase/migrations/`](supabase/migrations) **dans l'ordre** (`0001_init.sql` → `0013_mdp_provisoire.sql`) : tables, sécurité RLS, trigger de création de profil, chat temps réel, liens & outils, module stock, accès par application, dossiers, contrôle fin des comptes.
+2. Dans **SQL Editor**, exécutez les fichiers de [`supabase/migrations/`](supabase/migrations) **dans l'ordre** (`0001_init.sql` → `0014_dm_temps.sql`) : tables, sécurité RLS, trigger de création de profil, chat temps réel, liens & outils, module stock, accès par application, dossiers, contrôle fin des comptes.
 3. *(Optionnel)* Exécutez [`supabase/seed.sql`](supabase/seed.sql) pour partir avec des données d'exemple.
 4. Dans **Authentication → Providers**, vérifiez que *Email* est activé. Désactivez « Confirm email » si vous voulez des inscriptions immédiates.
 5. Récupérez dans **Settings → API** : l'URL du projet et la clé `anon public`.
