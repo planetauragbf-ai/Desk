@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { signalerErreur } from '../lib/erreurs'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { computeStats, descendantsOf } from '../lib/compute'
@@ -67,27 +68,35 @@ export default function ObjectiveDetail() {
   const objIndicators = indicators.filter((i) => i.objective_id === objective.id)
 
   async function toggleClose() {
-    const done = objective!.status === 'termine'
-    await update('objectives', objective!.id, {
-      status: done ? 'en_cours' : 'termine',
-      closed_at: done ? null : new Date().toISOString(),
-    })
-    refreshObjectives()
+    try {
+      const done = objective!.status === 'termine'
+      await update('objectives', objective!.id, {
+        status: done ? 'en_cours' : 'termine',
+        closed_at: done ? null : new Date().toISOString(),
+      })
+      refreshObjectives()
+    } catch (err) {
+      signalerErreur(err, "Ouverture/clôture de l'objectif")
+    }
   }
 
   async function deleteObjective() {
-    const scope = [objective!, ...descendantsOf(objectives, objective!.id)]
-    const label = scope.length > 1 ? `ses ${scope.length - 1} sous-objectif(s) et ` : ''
-    if (!confirm(`Supprimer définitivement « ${objective!.title} », ${label}toutes les données liées (tâches, notes, documents, décisions, indicateurs) ?`)) return
-    const ids = new Set(scope.map((o) => o.id))
-    for (const t of allTasks.filter((t) => t.objective_id && ids.has(t.objective_id))) await remove('tasks', t.id)
-    for (const n of notes.filter((n) => n.objective_id && ids.has(n.objective_id))) await remove('notes', n.id)
-    for (const d of documents.filter((d) => d.objective_id && ids.has(d.objective_id))) await remove('documents', d.id)
-    for (const d of decisions.filter((d) => d.objective_id && ids.has(d.objective_id))) await remove('decisions', d.id)
-    for (const i of indicators.filter((i) => ids.has(i.objective_id))) await remove('indicators', i.id)
-    for (const m of membersRows.filter((m) => ids.has(m.objective_id))) await remove('objective_members', m.id)
-    for (const o of [...scope].reverse()) await remove('objectives', o.id)
-    navigate('/objectifs')
+    try {
+      const scope = [objective!, ...descendantsOf(objectives, objective!.id)]
+      const label = scope.length > 1 ? `ses ${scope.length - 1} sous-objectif(s) et ` : ''
+      if (!confirm(`Supprimer définitivement « ${objective!.title} », ${label}toutes les données liées (tâches, notes, documents, décisions, indicateurs) ?`)) return
+      const ids = new Set(scope.map((o) => o.id))
+      for (const t of allTasks.filter((t) => t.objective_id && ids.has(t.objective_id))) await remove('tasks', t.id)
+      for (const n of notes.filter((n) => n.objective_id && ids.has(n.objective_id))) await remove('notes', n.id)
+      for (const d of documents.filter((d) => d.objective_id && ids.has(d.objective_id))) await remove('documents', d.id)
+      for (const d of decisions.filter((d) => d.objective_id && ids.has(d.objective_id))) await remove('decisions', d.id)
+      for (const i of indicators.filter((i) => ids.has(i.objective_id))) await remove('indicators', i.id)
+      for (const m of membersRows.filter((m) => ids.has(m.objective_id))) await remove('objective_members', m.id)
+      for (const o of [...scope].reverse()) await remove('objectives', o.id)
+      navigate('/objectifs')
+    } catch (err) {
+      signalerErreur(err, "Suppression de l'objectif")
+    }
   }
 
   return (
@@ -191,9 +200,13 @@ function SyntheseTab({ objective, stats, parent, children, directTasks, refreshO
   const [text, setText] = useState(objective.expected_result)
 
   async function saveExpected() {
-    await update('objectives', objective.id, { expected_result: text })
-    setEditing(false)
-    refreshObjectives()
+    try {
+      await update('objectives', objective.id, { expected_result: text })
+      setEditing(false)
+      refreshObjectives()
+    } catch (err) {
+      signalerErreur(err, 'Enregistrement')
+    }
   }
 
   const upcoming = directTasks
@@ -340,40 +353,48 @@ function PlanTab({ objectiveId, children, objectives, allTasks, indicators, dire
   const groups = [...new Set(directTasks.filter((t) => t.workflow_group).map((t) => t.workflow_group!))]
 
   async function applyTemplate(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const templateId = String(new FormData(e.currentTarget).get('template_id'))
-    if (!templateId) return
-    const tplSteps = steps.filter((s) => s.template_id === templateId).sort((a, b) => a.position - b.position)
-    for (const step of tplSteps) {
-      const stepActions = actions.filter((a) => a.step_id === step.id).sort((a, b) => a.position - b.position)
-      for (const action of stepActions) {
-        await insert('tasks', {
-          objective_id: objectiveId,
-          title: action.title,
-          status: 'a_faire',
-          priority: 'moyenne',
-          workflow_group: step.title,
-        } as Partial<Task>)
+    try {
+      e.preventDefault()
+      const templateId = String(new FormData(e.currentTarget).get('template_id'))
+      if (!templateId) return
+      const tplSteps = steps.filter((s) => s.template_id === templateId).sort((a, b) => a.position - b.position)
+      for (const step of tplSteps) {
+        const stepActions = actions.filter((a) => a.step_id === step.id).sort((a, b) => a.position - b.position)
+        for (const action of stepActions) {
+          await insert('tasks', {
+            objective_id: objectiveId,
+            title: action.title,
+            status: 'a_faire',
+            priority: 'moyenne',
+            workflow_group: step.title,
+          } as Partial<Task>)
+        }
       }
+      await update('workflow_templates', templateId, { status: 'utilisee', updated_at: new Date().toISOString() })
+      setApplying(false)
+      refreshTasks()
+    } catch (err) {
+      signalerErreur(err, 'Import du process')
     }
-    await update('workflow_templates', templateId, { status: 'utilisee', updated_at: new Date().toISOString() })
-    setApplying(false)
-    refreshTasks()
   }
 
   async function createSub(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    await insert('objectives', {
-      title: String(fd.get('title')),
-      parent_id: objectiveId,
-      status: 'non_initie',
-      priority: 'moyenne',
-      due_date: String(fd.get('due_date')) || null,
-      owner_id: String(fd.get('owner_id')) || null,
-    } as Partial<import('../lib/types').Objective>)
-    setShowSub(false)
-    refreshObjectives()
+    try {
+      e.preventDefault()
+      const fd = new FormData(e.currentTarget)
+      await insert('objectives', {
+        title: String(fd.get('title')),
+        parent_id: objectiveId,
+        status: 'non_initie',
+        priority: 'moyenne',
+        due_date: String(fd.get('due_date')) || null,
+        owner_id: String(fd.get('owner_id')) || null,
+      } as Partial<import('../lib/types').Objective>)
+      setShowSub(false)
+      refreshObjectives()
+    } catch (err) {
+      signalerErreur(err, 'Création du sous-objectif')
+    }
   }
 
   return (
@@ -526,35 +547,43 @@ function TasksTab({ objectiveId, tasks, profiles, refresh }: {
   const taskLink = `/objectifs/${objectiveId}?onglet=taches`
 
   async function setStatus(t: Task, status: TaskStatus) {
-    let target = status
-    // Circuit de validation : si un valideur est désigné, « Terminé »
-    // demandé par quelqu'un d'autre passe d'abord en validation.
-    if (status === 'termine' && t.validator_id && profile?.id !== t.validator_id) {
-      target = 'validation'
-      await notify(
-        t.validator_id,
-        `Validation demandée par ${profile?.full_name ?? '—'} : « ${t.title} »`,
-        taskLink,
-      )
+    try {
+      let target = status
+      // Circuit de validation : si un valideur est désigné, « Terminé »
+      // demandé par quelqu'un d'autre passe d'abord en validation.
+      if (status === 'termine' && t.validator_id && profile?.id !== t.validator_id) {
+        target = 'validation'
+        await notify(
+          t.validator_id,
+          `Validation demandée par ${profile?.full_name ?? '—'} : « ${t.title} »`,
+          taskLink,
+        )
+      }
+      if (status === 'validation' && t.validator_id && profile?.id !== t.validator_id) {
+        await notify(t.validator_id, `Validation demandée : « ${t.title} »`, taskLink)
+      }
+      await update('tasks', t.id, {
+        status: target,
+        completed_at: target === 'termine' ? new Date().toISOString() : null,
+      })
+      // Le valideur clôt une tâche en validation : l'exécutant est prévenu.
+      if (target === 'termine' && t.status === 'validation' && t.assignee_id && t.assignee_id !== profile?.id) {
+        await notify(t.assignee_id, `Votre tâche « ${t.title} » a été validée ✔`, taskLink)
+      }
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Changement de statut')
     }
-    if (status === 'validation' && t.validator_id && profile?.id !== t.validator_id) {
-      await notify(t.validator_id, `Validation demandée : « ${t.title} »`, taskLink)
-    }
-    await update('tasks', t.id, {
-      status: target,
-      completed_at: target === 'termine' ? new Date().toISOString() : null,
-    })
-    // Le valideur clôt une tâche en validation : l'exécutant est prévenu.
-    if (target === 'termine' && t.status === 'validation' && t.assignee_id && t.assignee_id !== profile?.id) {
-      await notify(t.assignee_id, `Votre tâche « ${t.title} » a été validée ✔`, taskLink)
-    }
-    refresh()
   }
 
   async function removeTask(t: Task) {
-    if (!confirm(`Supprimer la tâche « ${t.title} » ?`)) return
-    await remove('tasks', t.id)
-    refresh()
+    try {
+      if (!confirm(`Supprimer la tâche « ${t.title} » ?`)) return
+      await remove('tasks', t.id)
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Suppression de la tâche')
+    }
   }
 
   function doerLabel(t: Task) {
@@ -659,55 +688,63 @@ function TaskEditModal({ objectiveId, task, profiles, onClose, onSaved }: {
   const taskDocs = task ? allDocs.filter((d) => d.task_id === task.id) : []
 
   async function save(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const payload: Partial<Task> = {
-      title: String(fd.get('title')),
-      description: String(fd.get('description') ?? ''),
-      priority: String(fd.get('priority')) as Priority,
-      due_date: String(fd.get('due_date')) || null,
-      assigned_kind: kind,
-      assignee_id: kind === 'salarie' ? String(fd.get('assignee_id')) || null : null,
-      external_name: kind === 'client' ? String(fd.get('external_name')) || null : null,
-      validator_id: String(fd.get('validator_id')) || null,
+    try {
+      e.preventDefault()
+      const fd = new FormData(e.currentTarget)
+      const payload: Partial<Task> = {
+        title: String(fd.get('title')),
+        description: String(fd.get('description') ?? ''),
+        priority: String(fd.get('priority')) as Priority,
+        due_date: String(fd.get('due_date')) || null,
+        assigned_kind: kind,
+        assignee_id: kind === 'salarie' ? String(fd.get('assignee_id')) || null : null,
+        external_name: kind === 'client' ? String(fd.get('external_name')) || null : null,
+        validator_id: String(fd.get('validator_id')) || null,
+      }
+      const taskLink = `/objectifs/${objectiveId}?onglet=taches`
+      if (task) {
+        await update('tasks', task.id, payload)
+        // Nouvelle attribution ou nouveau valideur : les intéressés sont prévenus.
+        if (payload.assignee_id && payload.assignee_id !== task.assignee_id && payload.assignee_id !== profile?.id) {
+          await notify(payload.assignee_id, `Une tâche vous a été attribuée : « ${payload.title} »`, taskLink)
+        }
+        if (payload.validator_id && payload.validator_id !== task.validator_id && payload.validator_id !== profile?.id) {
+          await notify(payload.validator_id, `Vous êtes désigné(e) valideur de « ${payload.title} »`, taskLink)
+        }
+      } else {
+        await insert('tasks', { ...payload, objective_id: objectiveId, status: 'a_faire' } as Partial<Task>)
+        if (payload.assignee_id && payload.assignee_id !== profile?.id) {
+          await notify(payload.assignee_id, `Une tâche vous a été attribuée : « ${payload.title} »`, taskLink)
+        }
+        if (payload.validator_id && payload.validator_id !== profile?.id) {
+          await notify(payload.validator_id, `Vous êtes désigné(e) valideur de « ${payload.title} »`, taskLink)
+        }
+      }
+      onSaved()
+    } catch (err) {
+      signalerErreur(err, 'Enregistrement')
     }
-    const taskLink = `/objectifs/${objectiveId}?onglet=taches`
-    if (task) {
-      await update('tasks', task.id, payload)
-      // Nouvelle attribution ou nouveau valideur : les intéressés sont prévenus.
-      if (payload.assignee_id && payload.assignee_id !== task.assignee_id && payload.assignee_id !== profile?.id) {
-        await notify(payload.assignee_id, `Une tâche vous a été attribuée : « ${payload.title} »`, taskLink)
-      }
-      if (payload.validator_id && payload.validator_id !== task.validator_id && payload.validator_id !== profile?.id) {
-        await notify(payload.validator_id, `Vous êtes désigné(e) valideur de « ${payload.title} »`, taskLink)
-      }
-    } else {
-      await insert('tasks', { ...payload, objective_id: objectiveId, status: 'a_faire' } as Partial<Task>)
-      if (payload.assignee_id && payload.assignee_id !== profile?.id) {
-        await notify(payload.assignee_id, `Une tâche vous a été attribuée : « ${payload.title} »`, taskLink)
-      }
-      if (payload.validator_id && payload.validator_id !== profile?.id) {
-        await notify(payload.validator_id, `Vous êtes désigné(e) valideur de « ${payload.title} »`, taskLink)
-      }
-    }
-    onSaved()
   }
 
   async function addDoc(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (!task) return
-    const fd = new FormData(e.currentTarget)
-    const name = String(fd.get('doc_name')).trim()
-    if (!name) return
-    await insert('documents', {
-      name,
-      folder: 'Projets',
-      url: String(fd.get('doc_url')) || null,
-      objective_id: objectiveId,
-      task_id: task.id,
-    } as Partial<import('../lib/types').DocumentMeta>)
-    e.currentTarget.reset()
-    refreshDocs()
+    try {
+      e.preventDefault()
+      if (!task) return
+      const fd = new FormData(e.currentTarget)
+      const name = String(fd.get('doc_name')).trim()
+      if (!name) return
+      await insert('documents', {
+        name,
+        folder: 'Projets',
+        url: String(fd.get('doc_url')) || null,
+        objective_id: objectiveId,
+        task_id: task.id,
+      } as Partial<import('../lib/types').DocumentMeta>)
+      e.currentTarget.reset()
+      refreshDocs()
+    } catch (err) {
+      signalerErreur(err, 'Ajout du document')
+    }
   }
 
   return (
@@ -826,20 +863,24 @@ function NotesTab({ objectiveId, notes, profiles, authorId, refresh }: {
   const [showNew, setShowNew] = useState(false)
 
   async function createNote(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const now = new Date().toISOString()
-    await insert('notes', {
-      title: String(fd.get('title')),
-      content: String(fd.get('content') ?? ''),
-      objective_id: objectiveId,
-      author_id: authorId,
-      shared: true,
-      created_at: now,
-      updated_at: now,
-    } as Partial<Note>)
-    setShowNew(false)
-    refresh()
+    try {
+      e.preventDefault()
+      const fd = new FormData(e.currentTarget)
+      const now = new Date().toISOString()
+      await insert('notes', {
+        title: String(fd.get('title')),
+        content: String(fd.get('content') ?? ''),
+        objective_id: objectiveId,
+        author_id: authorId,
+        shared: true,
+        created_at: now,
+        updated_at: now,
+      } as Partial<Note>)
+      setShowNew(false)
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Création de la note')
+    }
   }
 
   return (
@@ -899,17 +940,21 @@ function DocumentsTab({ objectiveId, docs, authorId, refresh }: {
   const [showNew, setShowNew] = useState(false)
 
   async function createDoc(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    await insert('documents', {
-      name: String(fd.get('name')),
-      folder: String(fd.get('folder') || 'Général'),
-      url: String(fd.get('url')) || null,
-      objective_id: objectiveId,
-      author_id: authorId,
-    } as Partial<DocumentMeta>)
-    setShowNew(false)
-    refresh()
+    try {
+      e.preventDefault()
+      const fd = new FormData(e.currentTarget)
+      await insert('documents', {
+        name: String(fd.get('name')),
+        folder: String(fd.get('folder') || 'Général'),
+        url: String(fd.get('url')) || null,
+        objective_id: objectiveId,
+        author_id: authorId,
+      } as Partial<DocumentMeta>)
+      setShowNew(false)
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Ajout du document')
+    }
   }
 
   return (
@@ -993,31 +1038,39 @@ function DecisionsTab({ objectiveId, decisions, profiles, deciderId, refresh }: 
   const [arbitrating, setArbitrating] = useState<Decision | null>(null)
 
   async function createDecision(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    await insert('decisions', {
-      objective_id: objectiveId,
-      title: String(fd.get('title')),
-      context: String(fd.get('context') ?? ''),
-      status: 'a_instruire',
-      outcome: '',
-    } as Partial<Decision>)
-    setShowNew(false)
-    refresh()
+    try {
+      e.preventDefault()
+      const fd = new FormData(e.currentTarget)
+      await insert('decisions', {
+        objective_id: objectiveId,
+        title: String(fd.get('title')),
+        context: String(fd.get('context') ?? ''),
+        status: 'a_instruire',
+        outcome: '',
+      } as Partial<Decision>)
+      setShowNew(false)
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Création de la décision')
+    }
   }
 
   async function arbitrate(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (!arbitrating) return
-    const fd = new FormData(e.currentTarget)
-    await update('decisions', arbitrating.id, {
-      status: 'arbitree',
-      outcome: String(fd.get('outcome')),
-      decided_by: deciderId,
-      decided_at: new Date().toISOString(),
-    })
-    setArbitrating(null)
-    refresh()
+    try {
+      e.preventDefault()
+      if (!arbitrating) return
+      const fd = new FormData(e.currentTarget)
+      await update('decisions', arbitrating.id, {
+        status: 'arbitree',
+        outcome: String(fd.get('outcome')),
+        decided_by: deciderId,
+        decided_at: new Date().toISOString(),
+      })
+      setArbitrating(null)
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Arbitrage')
+    }
   }
 
   const columns: { status: Decision['status']; title: string }[] = [
@@ -1116,24 +1169,32 @@ function IndicatorsTab({ objectiveId, indicators, refresh }: {
   const [showNew, setShowNew] = useState(false)
 
   async function createIndicator(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    await insert('indicators', {
-      objective_id: objectiveId,
-      name: String(fd.get('name')),
-      unit: String(fd.get('unit') ?? ''),
-      target_value: Number(fd.get('target_value') ?? 0),
-      current_value: Number(fd.get('current_value') ?? 0),
-      due_date: String(fd.get('due_date')) || null,
-      updated_at: new Date().toISOString(),
-    } as Partial<Indicator>)
-    setShowNew(false)
-    refresh()
+    try {
+      e.preventDefault()
+      const fd = new FormData(e.currentTarget)
+      await insert('indicators', {
+        objective_id: objectiveId,
+        name: String(fd.get('name')),
+        unit: String(fd.get('unit') ?? ''),
+        target_value: Number(fd.get('target_value') ?? 0),
+        current_value: Number(fd.get('current_value') ?? 0),
+        due_date: String(fd.get('due_date')) || null,
+        updated_at: new Date().toISOString(),
+      } as Partial<Indicator>)
+      setShowNew(false)
+      refresh()
+    } catch (err) {
+      signalerErreur(err, "Création de l'indicateur")
+    }
   }
 
   async function updateValue(ind: Indicator, value: number) {
-    await update('indicators', ind.id, { current_value: value, updated_at: new Date().toISOString() })
-    refresh()
+    try {
+      await update('indicators', ind.id, { current_value: value, updated_at: new Date().toISOString() })
+      refresh()
+    } catch (err) {
+      signalerErreur(err, "Mise à jour de l'indicateur")
+    }
   }
 
   return (

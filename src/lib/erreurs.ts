@@ -73,6 +73,41 @@ export function messageErreur(e: unknown): string {
   return brut || "L'action n'a pas pu être effectuée."
 }
 
+/** Erreur affichée à l'écran. */
+export interface ErreurAffichee {
+  id: number
+  contexte?: string
+  message: string
+}
+
+type Abonne = (e: ErreurAffichee) => void
+
+const abonnes = new Set<Abonne>()
+let compteur = 0
+
+/** S'abonner au flux d'erreurs (utilisé par le bandeau d'erreurs). */
+export function surErreur(fn: Abonne): () => void {
+  abonnes.add(fn)
+  return () => abonnes.delete(fn)
+}
+
+/**
+ * Signale une erreur à l'utilisateur.
+ *
+ * Passe par le bandeau d'erreurs quand il est monté ; retombe sur `alert`
+ * sinon (erreur survenue avant le premier rendu, par exemple).
+ */
+export function signalerErreur(e: unknown, contexte?: string) {
+  const message = messageErreur(e)
+  console.error(contexte ?? 'Erreur', e)
+  const erreur: ErreurAffichee = { id: ++compteur, contexte, message }
+  if (abonnes.size === 0) {
+    alert(contexte ? `${contexte} : ${message}` : message)
+    return
+  }
+  abonnes.forEach((fn) => fn(erreur))
+}
+
 /**
  * Exécute une écriture et affiche un message clair si elle échoue.
  * Renvoie `null` en cas d'échec, ce qui permet d'interrompre proprement
@@ -82,8 +117,22 @@ export async function essayer<T>(action: () => Promise<T>, contexte?: string): P
   try {
     return await action()
   } catch (e) {
-    console.error(contexte ?? 'Action', e)
-    alert(contexte ? `${contexte} : ${messageErreur(e)}` : messageErreur(e))
+    signalerErreur(e, contexte)
     return null
   }
+}
+
+/**
+ * Filet de sécurité : toute écriture dont l'erreur n'est pas rattrapée par
+ * l'appelant remonte quand même à l'écran. Une trentaine d'enregistrements
+ * échouaient jusqu'ici en silence — l'action semblait simplement ignorée.
+ */
+export function installerFiletErreurs() {
+  window.addEventListener('unhandledrejection', (e) => {
+    const brut = e.reason instanceof Error ? e.reason.message : String(e.reason ?? '')
+    // Bruit de navigation / annulations : sans intérêt pour l'utilisateur.
+    if (/AbortError|The user aborted|ResizeObserver/i.test(brut)) return
+    e.preventDefault()
+    signalerErreur(e.reason)
+  })
 }

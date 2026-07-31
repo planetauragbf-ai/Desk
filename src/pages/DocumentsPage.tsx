@@ -1,12 +1,13 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { signalerErreur } from '../lib/erreurs'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { can, visibleObjectives } from '../lib/permissions'
 import { formatDate } from '../lib/format'
 import { insert, remove, update } from '../lib/data'
 import type { DocumentMeta } from '../lib/types'
-import { Card, EmptyState, Modal } from '../components/ui'
+import { Card, EmptyState, Modal, Skeleton } from '../components/ui'
 
 export default function DocumentsPage() {
   const { profile } = useAuth()
@@ -15,7 +16,7 @@ export default function DocumentsPage() {
   const [folder, setFolder] = useState<string | null>(null)
   const [search, setSearch] = useState('')
 
-  const { rows: documents, refresh } = useTable('documents', undefined, { column: 'created_at', ascending: false })
+  const { rows: documents, refresh, loading } = useTable('documents', undefined, { column: 'created_at', ascending: false })
   const { rows: folderRows, refresh: refreshFolders } = useTable('folders', { kind: 'documents' }, { column: 'created_at', ascending: true })
   const { rows: allObjectives } = useTable('objectives')
   const { rows: tasks } = useTable('tasks')
@@ -44,57 +45,73 @@ export default function DocumentsPage() {
   }, [documents, objectives, folder, search])
 
   async function saveDoc(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const payload = {
-      name: String(fd.get('name')),
-      folder: String(fd.get('folder') || 'Général'),
-      url: String(fd.get('url')) || null,
-      objective_id: String(fd.get('objective_id')) || null,
+    try {
+      e.preventDefault()
+      const fd = new FormData(e.currentTarget)
+      const payload = {
+        name: String(fd.get('name')),
+        folder: String(fd.get('folder') || 'Général'),
+        url: String(fd.get('url')) || null,
+        objective_id: String(fd.get('objective_id')) || null,
+      }
+      if (editing) {
+        await update('documents', editing.id, payload)
+        setEditing(null)
+      } else {
+        await insert('documents', { ...payload, author_id: profile?.id ?? null } as Partial<DocumentMeta>)
+        setShowNew(false)
+      }
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Enregistrement du document')
     }
-    if (editing) {
-      await update('documents', editing.id, payload)
-      setEditing(null)
-    } else {
-      await insert('documents', { ...payload, author_id: profile?.id ?? null } as Partial<DocumentMeta>)
-      setShowNew(false)
-    }
-    refresh()
   }
 
   async function createFolder() {
-    const name = prompt('Nom du nouveau dossier :')?.trim()
-    if (!name) return
-    if (folders.includes(name)) return alert('Ce dossier existe déjà.')
-    await insert('folders', { kind: 'documents', name })
-    refreshFolders()
+    try {
+      const name = prompt('Nom du nouveau dossier :')?.trim()
+      if (!name) return
+      if (folders.includes(name)) return alert('Ce dossier existe déjà.')
+      await insert('folders', { kind: 'documents', name })
+      refreshFolders()
+    } catch (err) {
+      signalerErreur(err, 'Création du dossier')
+    }
   }
 
   async function renameFolder(oldName: string) {
-    const name = prompt(`Renommer le dossier « ${oldName} » en :`, oldName)?.trim()
-    if (!name || name === oldName) return
-    if (folders.includes(name)) return alert('Un dossier porte déjà ce nom.')
-    const row = folderRows.find((f) => f.name === oldName)
-    if (row) await update('folders', row.id, { name })
-    else await insert('folders', { kind: 'documents', name })
-    // Déplace les documents du dossier renommé.
-    await Promise.all(documents.filter((d) => d.folder === oldName).map((d) => update('documents', d.id, { folder: name })))
-    if (folder === oldName) setFolder(name)
-    refreshFolders()
-    refresh()
+    try {
+      const name = prompt(`Renommer le dossier « ${oldName} » en :`, oldName)?.trim()
+      if (!name || name === oldName) return
+      if (folders.includes(name)) return alert('Un dossier porte déjà ce nom.')
+      const row = folderRows.find((f) => f.name === oldName)
+      if (row) await update('folders', row.id, { name })
+      else await insert('folders', { kind: 'documents', name })
+      // Déplace les documents du dossier renommé.
+      await Promise.all(documents.filter((d) => d.folder === oldName).map((d) => update('documents', d.id, { folder: name })))
+      if (folder === oldName) setFolder(name)
+      refreshFolders()
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Renommage du dossier')
+    }
   }
 
   async function deleteFolder(name: string) {
-    const count = documents.filter((d) => d.folder === name).length
-    if (!confirm(count
-      ? `Supprimer le dossier « ${name} » ? Ses ${count} document(s) seront déplacés dans « Général ».`
-      : `Supprimer le dossier « ${name} » ?`)) return
-    await Promise.all(documents.filter((d) => d.folder === name).map((d) => update('documents', d.id, { folder: 'Général' })))
-    const row = folderRows.find((f) => f.name === name)
-    if (row) await remove('folders', row.id)
-    if (folder === name) setFolder(null)
-    refreshFolders()
-    refresh()
+    try {
+      const count = documents.filter((d) => d.folder === name).length
+      if (!confirm(count
+        ? `Supprimer le dossier « ${name} » ? Ses ${count} document(s) seront déplacés dans « Général ».`
+        : `Supprimer le dossier « ${name} » ?`)) return
+      await Promise.all(documents.filter((d) => d.folder === name).map((d) => update('documents', d.id, { folder: 'Général' })))
+      const row = folderRows.find((f) => f.name === name)
+      if (row) await remove('folders', row.id)
+      if (folder === name) setFolder(null)
+      refreshFolders()
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Suppression du dossier')
+    }
   }
 
   const objectiveTitle = (id: string | null) => objectives.find((o) => o.id === id)?.title
@@ -149,7 +166,9 @@ export default function DocumentsPage() {
 
         <input className="input max-w-sm mb-4" placeholder="Rechercher un document…" value={search} onChange={(e) => setSearch(e.target.value)} />
 
-        {filtered.length === 0 ? (
+        {loading ? (
+          <Skeleton lines={4} />
+        ) : filtered.length === 0 ? (
           <EmptyState>Aucun document{folder ? ` dans « ${folder} »` : ''}.</EmptyState>
         ) : (
           <div className="overflow-x-auto">

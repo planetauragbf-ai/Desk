@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { signalerErreur } from '../lib/erreurs'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { formatDate, profileName } from '../lib/format'
@@ -21,36 +22,48 @@ export default function Workflows() {
   const current = templates.find((t) => t.id === selected)
 
   async function createTemplate(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const now = new Date().toISOString()
-    const t = await insert('workflow_templates', {
-      name: String(fd.get('name')),
-      description: String(fd.get('description') ?? ''),
-      owner_id: profile?.id ?? null,
-      status: 'a_utiliser',
-      created_at: now,
-      updated_at: now,
-    } as Partial<WorkflowTemplate>)
-    setParams({})
-    refreshTemplates()
-    setSelected(t.id)
+    try {
+      e.preventDefault()
+      const fd = new FormData(e.currentTarget)
+      const now = new Date().toISOString()
+      const t = await insert('workflow_templates', {
+        name: String(fd.get('name')),
+        description: String(fd.get('description') ?? ''),
+        owner_id: profile?.id ?? null,
+        status: 'a_utiliser',
+        created_at: now,
+        updated_at: now,
+      } as Partial<WorkflowTemplate>)
+      setParams({})
+      refreshTemplates()
+      setSelected(t.id)
+    } catch (err) {
+      signalerErreur(err, 'Création du process')
+    }
   }
 
   async function addStep(templateId: string) {
-    const title = prompt('Titre de la nouvelle étape :')
-    if (!title) return
-    const position = steps.filter((s) => s.template_id === templateId).length + 1
-    await insert('workflow_steps', { template_id: templateId, position, title } as Partial<WorkflowStep>)
-    refreshSteps()
+    try {
+      const title = prompt('Titre de la nouvelle étape :')
+      if (!title) return
+      const position = steps.filter((s) => s.template_id === templateId).length + 1
+      await insert('workflow_steps', { template_id: templateId, position, title } as Partial<WorkflowStep>)
+      refreshSteps()
+    } catch (err) {
+      signalerErreur(err, "Ajout de l'étape")
+    }
   }
 
   async function addAction(stepId: string) {
-    const title = prompt("Libellé de l'action :")
-    if (!title) return
-    const position = actions.filter((a) => a.step_id === stepId).length + 1
-    await insert('workflow_actions', { step_id: stepId, position, title })
-    refreshActions()
+    try {
+      const title = prompt("Libellé de l'action :")
+      if (!title) return
+      const position = actions.filter((a) => a.step_id === stepId).length + 1
+      await insert('workflow_actions', { step_id: stepId, position, title })
+      refreshActions()
+    } catch (err) {
+      signalerErreur(err, "Ajout de l'action")
+    }
   }
 
   return (
