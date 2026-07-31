@@ -21,8 +21,10 @@ create index if not exists audit_log_created_idx on public.audit_log (created_at
 alter table public.audit_log enable row level security;
 
 -- Tout utilisateur connecté écrit ses actions ; seuls les admins lisent.
+drop policy if exists "audit_insert" on public.audit_log;
 create policy "audit_insert" on public.audit_log
   for insert to authenticated with check (true);
+drop policy if exists "audit_admin_select" on public.audit_log;
 create policy "audit_admin_select" on public.audit_log
   for select to authenticated
   using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));

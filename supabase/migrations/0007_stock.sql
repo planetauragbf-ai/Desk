@@ -26,7 +26,11 @@ create policy "app_state_auth" on public.app_state
   using (true) with check (true);
 
 -- ---------- Temps réel : synchro multi-appareils du stock
-alter publication supabase_realtime add table public.app_state;
+do $$
+begin
+  alter publication supabase_realtime add table public.app_state;
+exception when duplicate_object then null;
+end $$;
 
 -- ---------- Storage : bucket photos (public en lecture pour les fiches QR)
 insert into storage.buckets (id, name, public)

@@ -19,10 +19,12 @@ create table if not exists public.objective_members (
 
 alter table public.objective_members enable row level security;
 
+drop policy if exists "objective_members_select" on public.objective_members;
 create policy "objective_members_select" on public.objective_members
   for select to authenticated using (true);
 
 -- Seuls les administrateurs modifient les attributions.
+drop policy if exists "objective_members_admin_write" on public.objective_members;
 create policy "objective_members_admin_write" on public.objective_members
   for all to authenticated
   using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))

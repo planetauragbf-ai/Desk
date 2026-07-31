@@ -16,6 +16,7 @@ create table if not exists public.folders (
 
 alter table public.folders enable row level security;
 
+drop policy if exists "folders_all" on public.folders;
 create policy "folders_all" on public.folders
   for all to authenticated using (true) with check (true);
 

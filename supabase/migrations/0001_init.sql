@@ -5,7 +5,7 @@
 -- ============================================================
 
 -- ---------- Instances (organigramme : sites, départements, équipes)
-create table public.instances (
+create table if not exists public.instances (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   parent_id uuid references public.instances(id) on delete set null,
@@ -14,7 +14,7 @@ create table public.instances (
 );
 
 -- ---------- Profils (miroir de auth.users)
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text not null default '',
   email text not null default '',
@@ -35,12 +35,13 @@ begin
 end;
 $$;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
 -- ---------- Objectifs (hiérarchiques : cap stratégique -> sous-objectifs)
-create table public.objectives (
+create table if not exists public.objectives (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   expected_result text not null default '',       -- Attendu / livrable
@@ -57,7 +58,7 @@ create table public.objectives (
 );
 
 -- ---------- Tâches (plan d'actions d'un objectif)
-create table public.tasks (
+create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(),
   objective_id uuid references public.objectives(id) on delete cascade,
   title text not null,
@@ -74,7 +75,7 @@ create table public.tasks (
 );
 
 -- ---------- Workflows (templates réutilisables : étapes -> actions)
-create table public.workflow_templates (
+create table if not exists public.workflow_templates (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   description text not null default '',
@@ -84,14 +85,14 @@ create table public.workflow_templates (
   updated_at timestamptz not null default now()
 );
 
-create table public.workflow_steps (
+create table if not exists public.workflow_steps (
   id uuid primary key default gen_random_uuid(),
   template_id uuid not null references public.workflow_templates(id) on delete cascade,
   position int not null default 0,
   title text not null
 );
 
-create table public.workflow_actions (
+create table if not exists public.workflow_actions (
   id uuid primary key default gen_random_uuid(),
   step_id uuid not null references public.workflow_steps(id) on delete cascade,
   position int not null default 0,
@@ -99,7 +100,7 @@ create table public.workflow_actions (
 );
 
 -- ---------- Notes (rattachées à un objectif ou une tâche, ou libres)
-create table public.notes (
+create table if not exists public.notes (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   content text not null default '',
@@ -112,7 +113,7 @@ create table public.notes (
 );
 
 -- ---------- Documents (métadonnées ; fichier dans Supabase Storage, bucket "documents")
-create table public.documents (
+create table if not exists public.documents (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   folder text not null default 'Général',
@@ -125,7 +126,7 @@ create table public.documents (
 );
 
 -- ---------- Décisions (mémoire des arbitrages, par objectif)
-create table public.decisions (
+create table if not exists public.decisions (
   id uuid primary key default gen_random_uuid(),
   objective_id uuid references public.objectives(id) on delete cascade,
   title text not null,
@@ -138,7 +139,7 @@ create table public.decisions (
 );
 
 -- ---------- Indicateurs de résultat (par objectif : cible vs réalisé)
-create table public.indicators (
+create table if not exists public.indicators (
   id uuid primary key default gen_random_uuid(),
   objective_id uuid not null references public.objectives(id) on delete cascade,
   name text not null,
@@ -150,7 +151,7 @@ create table public.indicators (
 );
 
 -- ---------- Notifications
-create table public.notifications (
+create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
   message text not null,
@@ -179,25 +180,42 @@ alter table public.decisions          enable row level security;
 alter table public.indicators         enable row level security;
 alter table public.notifications      enable row level security;
 
+drop policy if exists "instances_all" on public.instances;
 create policy "instances_all"  on public.instances          for all to authenticated using (true) with check (true);
+drop policy if exists "objectives_all" on public.objectives;
 create policy "objectives_all" on public.objectives         for all to authenticated using (true) with check (true);
+drop policy if exists "tasks_all" on public.tasks;
 create policy "tasks_all"      on public.tasks              for all to authenticated using (true) with check (true);
+drop policy if exists "wft_all" on public.workflow_templates;
 create policy "wft_all"        on public.workflow_templates for all to authenticated using (true) with check (true);
+drop policy if exists "wfs_all" on public.workflow_steps;
 create policy "wfs_all"        on public.workflow_steps     for all to authenticated using (true) with check (true);
+drop policy if exists "wfa_all" on public.workflow_actions;
 create policy "wfa_all"        on public.workflow_actions   for all to authenticated using (true) with check (true);
+drop policy if exists "notes_all" on public.notes;
 create policy "notes_all"      on public.notes              for all to authenticated using (true) with check (true);
+drop policy if exists "documents_all" on public.documents;
 create policy "documents_all"  on public.documents          for all to authenticated using (true) with check (true);
+drop policy if exists "decisions_all" on public.decisions;
 create policy "decisions_all"  on public.decisions          for all to authenticated using (true) with check (true);
+drop policy if exists "indicators_all" on public.indicators;
 create policy "indicators_all" on public.indicators         for all to authenticated using (true) with check (true);
 
+drop policy if exists "profiles_select" on public.profiles;
 create policy "profiles_select" on public.profiles for select to authenticated using (true);
+drop policy if exists "profiles_update" on public.profiles;
 create policy "profiles_update" on public.profiles for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
+drop policy if exists "profiles_admin_update" on public.profiles;
 create policy "profiles_admin_update" on public.profiles for update to authenticated
   using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
 
+drop policy if exists "notifications_select" on public.notifications;
 create policy "notifications_select" on public.notifications for select to authenticated using (user_id = auth.uid());
+drop policy if exists "notifications_write" on public.notifications;
 create policy "notifications_write"  on public.notifications for insert to authenticated with check (true);
+drop policy if exists "notifications_update" on public.notifications;
 create policy "notifications_update" on public.notifications for update to authenticated using (user_id = auth.uid());
+drop policy if exists "notifications_delete" on public.notifications;
 create policy "notifications_delete" on public.notifications for delete to authenticated using (user_id = auth.uid());
 
 -- ---------- Storage : bucket documents
@@ -205,9 +223,12 @@ insert into storage.buckets (id, name, public)
 values ('documents', 'documents', false)
 on conflict (id) do nothing;
 
+drop policy if exists "documents_bucket_read" on storage.objects;
 create policy "documents_bucket_read" on storage.objects for select to authenticated
   using (bucket_id = 'documents');
+drop policy if exists "documents_bucket_write" on storage.objects;
 create policy "documents_bucket_write" on storage.objects for insert to authenticated
   with check (bucket_id = 'documents');
+drop policy if exists "documents_bucket_delete" on storage.objects;
 create policy "documents_bucket_delete" on storage.objects for delete to authenticated
   using (bucket_id = 'documents');

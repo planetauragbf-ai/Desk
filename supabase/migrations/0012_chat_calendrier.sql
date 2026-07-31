@@ -27,6 +27,7 @@ create table if not exists public.channel_members (
 );
 
 alter table public.channel_members enable row level security;
+drop policy if exists "channel_members_all" on public.channel_members;
 create policy "channel_members_all" on public.channel_members
   for all to authenticated using (true) with check (true);
 
@@ -46,10 +47,15 @@ create table if not exists public.poll_votes (
 );
 
 alter table public.poll_votes enable row level security;
+drop policy if exists "poll_votes_all" on public.poll_votes;
 create policy "poll_votes_all" on public.poll_votes
   for all to authenticated using (true) with check (true);
 
-alter publication supabase_realtime add table public.poll_votes;
+do $$
+begin
+  alter publication supabase_realtime add table public.poll_votes;
+exception when duplicate_object then null;
+end $$;
 
 -- ---------- Storage : bucket chat (photos et fichiers des messages)
 insert into storage.buckets (id, name, public)
@@ -86,6 +92,7 @@ create table if not exists public.leaves (
 create index if not exists leaves_dates_idx on public.leaves (start_date, end_date);
 
 alter table public.leaves enable row level security;
+drop policy if exists "leaves_all" on public.leaves;
 create policy "leaves_all" on public.leaves
   for all to authenticated using (true) with check (true);
 
