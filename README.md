@@ -54,8 +54,8 @@ npm run dev        # http://localhost:5173 — mode démo si Supabase n'est pas 
 ### 2. Configurer Supabase (espace partagé multi-utilisateurs)
 
 1. Créez un projet sur [supabase.com](https://supabase.com) (offre gratuite suffisante pour démarrer).
-2. Dans **SQL Editor**, collez et exécutez [`supabase/scripts/installation_desk.sql`](supabase/scripts/installation_desk.sql) : c'est l'ensemble des migrations `0001` → `0018` en un seul fichier (tables, sécurité RLS, trigger de création de profil, chat temps réel, liens & outils, stock, dossiers, comptes, journal, calendrier, sinistres, index). Le script est **rejouable** : le relancer ne casse rien et ne touche pas aux données.
-   *Sur une base déjà en service*, exécutez plutôt [`supabase/scripts/rattrapage_0009_0018.sql`](supabase/scripts/rattrapage_0009_0018.sql), qui n'applique que les dossiers, la sécurité et les index.
+2. Dans **SQL Editor**, collez et exécutez [`supabase/scripts/installation_desk.sql`](supabase/scripts/installation_desk.sql) : c'est l'ensemble des migrations `0001` → `0019` en un seul fichier (tables, sécurité RLS, trigger de création de profil, chat temps réel, liens & outils, stock, dossiers, comptes, journal, calendrier, sinistres, index). Le script est **rejouable** : le relancer ne casse rien et ne touche pas aux données.
+   *Sur une base déjà en service*, exécutez plutôt [`supabase/scripts/rattrapage.sql`](supabase/scripts/rattrapage.sql), qui n'applique que les dossiers, la sécurité et les index.
    Les deux fichiers sont générés depuis `supabase/migrations/` par `./supabase/scripts/generer.sh` — modifiez les migrations, pas les scripts.
 3. *(Optionnel)* Exécutez [`supabase/seed.sql`](supabase/seed.sql) pour partir avec des données d'exemple.
 4. Dans **Authentication → Providers**, vérifiez que *Email* est activé. Désactivez « Confirm email » si vous voulez des inscriptions immédiates.
@@ -104,12 +104,12 @@ Chaque push sur une branche autre que `main` déclenche [`ci.yml`](.github/workf
 
 ```
 supabase/
-  migrations/                # schéma + RLS (0001 → 0018 : init, accès, branding, tâches, validation, chat & liens,
+  migrations/                # schéma + RLS (0001 → 0019 : init, accès, branding, tâches, validation, chat & liens,
                              #   stock, desk, dossiers, comptes, journal, calendrier, mot de passe provisoire,
                              #   messages privés & temps, sinistres, sécurité, index) — toutes rejouables
   scripts/generer.sh         # régénère les deux scripts ci-dessous depuis les migrations
   scripts/installation_desk.sql      # installation complète sur une base neuve
-  scripts/rattrapage_0009_0018.sql   # mise à niveau d'une base déjà en service
+  scripts/rattrapage.sql   # mise à niveau d'une base déjà en service
   seed.sql                   # données d'exemple (optionnel)
 src/
   lib/

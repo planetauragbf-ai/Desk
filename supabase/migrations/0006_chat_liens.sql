@@ -73,6 +73,8 @@ exception when duplicate_object then null;
 end $$;
 
 -- ---------- Canal par défaut
+-- Testé sur l'existence plutôt que par « on conflict » : 0019 remplace
+-- l'unicité globale du nom par une unicité limitée aux canaux nommés.
 insert into public.channels (name, description)
-values ('Général', 'Canal ouvert à toute l''équipe Planet Aura.')
-on conflict (name) do nothing;
+select 'Général', 'Canal ouvert à toute l''équipe Planet Aura.'
+where not exists (select 1 from public.channels where name = 'Général');

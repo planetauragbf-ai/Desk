@@ -58,7 +58,7 @@ insert into public.decisions (objective_id, title, context, status) values
 insert into public.channels (id, name, description) values
   ('55555555-5555-5555-5555-555555555501', 'Communication', 'Site web, réseaux sociaux et communauté.'),
   ('55555555-5555-5555-5555-555555555502', 'Événements', 'Préparation de l''événement annuel.')
-on conflict (name) do nothing;
+on conflict (id) do nothing;
 
 -- Liens & outils (nécessite 0006_chat_liens.sql)
 insert into public.links (label, url, description, category, emoji) values

@@ -5,6 +5,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# Migrations qui manquent à la base déjà en service. Ajoutez ici toute
+# nouvelle migration, et relancez ce script.
+RATTRAPAGE=(0009_dossiers 0017_securite 0018_performance 0019_chat_recursion)
+
 entete() {
   printf '\n\n-- ############################################################\n'
   printf -- '-- ### MIGRATION %s\n' "$1"
@@ -46,10 +50,11 @@ EOF
 --   0009  dossiers de Documents et de Liens & outils (jamais exécutée)
 --   0017  verrouillage de la sécurité (modèle « intermédiaire »)
 --   0018  performance : index, intégrité des données, temps réel
+--   0019  correctif : récursion des politiques du chat
 --
 -- À exécuter EN UNE SEULE FOIS : Supabase → SQL Editor → New query
--- → coller tout → Run. Les trois migrations sont reprises ci-dessous
--- dans le bon ordre.
+-- → coller tout → Run. Les migrations sont reprises ci-dessous dans
+-- le bon ordre.
 --
 -- Le script est REJOUABLE : le relancer ne casse rien et ne touche
 -- à aucune donnée existante.
@@ -58,10 +63,10 @@ EOF
 -- ============================================================
 
 EOF
-  for m in 0009_dossiers 0017_securite 0018_performance; do
+  for m in "${RATTRAPAGE[@]}"; do
     entete "$m"
     cat "supabase/migrations/$m.sql"
   done
-} > supabase/scripts/rattrapage_0009_0018.sql
+} > supabase/scripts/rattrapage.sql
 
-echo "installation_desk.sql et rattrapage_0009_0018.sql régénérés."
+echo "installation_desk.sql et rattrapage.sql régénérés."

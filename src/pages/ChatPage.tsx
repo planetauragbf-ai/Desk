@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { insert, list, remove, update } from '../lib/data'
+import { essayer, messageErreur } from '../lib/erreurs'
 import { notify } from '../lib/notify'
 import { can } from '../lib/permissions'
 import { supabase } from '../lib/supabase'
@@ -163,15 +164,23 @@ export default function ChatPage() {
         return
       }
     }
-    const created = await insert('channels', {
-      name: groupName,
-      description: '',
-      created_by: profile?.id ?? null,
-      private: true,
-      dm: true,
-    })
+    const created = await essayer(
+      () =>
+        insert('channels', {
+          name: groupName,
+          description: '',
+          created_by: profile?.id ?? null,
+          private: true,
+          dm: true,
+        }),
+      'Création de la conversation',
+    )
+    if (!created) return
     const ids = new Set([...memberIds, profile?.id ?? ''])
-    await Promise.all([...ids].filter(Boolean).map((id) => insert('channel_members', { channel_id: created.id, profile_id: id })))
+    await essayer(
+      () => Promise.all([...ids].filter(Boolean).map((id) => insert('channel_members', { channel_id: created.id, profile_id: id }))),
+      'Ajout des participants',
+    )
     setShowNewDm(false)
     refreshChannels()
     refreshMembers()
@@ -183,7 +192,13 @@ export default function ChatPage() {
     const content = draft.trim()
     if (!content || !channelId) return
     setDraft('')
-    await insert('messages', { channel_id: channelId, author_id: profile?.id ?? null, content })
+    try {
+      await insert('messages', { channel_id: channelId, author_id: profile?.id ?? null, content })
+    } catch (e) {
+      setDraft(content) // on rend son texte à l'expéditeur plutôt que de le perdre
+      alert(`Envoi impossible : ${messageErreur(e)}`)
+      return
+    }
     await notifyRecipients(content.slice(0, 60))
     refreshMessages()
   }
@@ -224,12 +239,17 @@ export default function ChatPage() {
       alert('Il faut une question et au moins 2 réponses (une par ligne).')
       return
     }
-    await insert('messages', {
-      channel_id: channelId,
-      author_id: profile?.id ?? null,
-      content: '',
-      poll: { question, options },
-    })
+    const envoye = await essayer(
+      () =>
+        insert('messages', {
+          channel_id: channelId,
+          author_id: profile?.id ?? null,
+          content: '',
+          poll: { question, options },
+        }),
+      'Création du questionnaire',
+    )
+    if (!envoye) return
     await notifyRecipients(`📊 sondage : ${question.slice(0, 50)}`)
     setShowPoll(false)
     refreshMessages()
@@ -237,10 +257,14 @@ export default function ChatPage() {
 
   async function vote(m: Message, optionIndex: number) {
     const mine = votes.find((v) => v.message_id === m.id && v.profile_id === profile?.id)
-    if (mine) await remove('poll_votes', mine.id)
-    if (!mine || mine.option_index !== optionIndex) {
-      await insert('poll_votes', { message_id: m.id, profile_id: profile?.id ?? '', option_index: optionIndex })
-    }
+    const ok = await essayer(async () => {
+      if (mine) await remove('poll_votes', mine.id)
+      if (!mine || mine.option_index !== optionIndex) {
+        await insert('poll_votes', { message_id: m.id, profile_id: profile?.id ?? '', option_index: optionIndex })
+      }
+      return true
+    }, 'Enregistrement du vote')
+    if (ok === null) return
     refreshVotes()
   }
 
@@ -249,15 +273,28 @@ export default function ChatPage() {
     const fd = new FormData(e.currentTarget)
     const isPrivate = fd.get('private') === 'on'
     const memberIds = fd.getAll('members').map(String)
-    const created = await insert('channels', {
-      name: String(fd.get('name')),
-      description: String(fd.get('description') ?? ''),
-      created_by: profile?.id ?? null,
-      private: isPrivate,
-    })
+    const name = String(fd.get('name') ?? '').trim()
+    if (!name) {
+      alert('Donnez un nom au canal.')
+      return
+    }
+    const created = await essayer(
+      () =>
+        insert('channels', {
+          name,
+          description: String(fd.get('description') ?? ''),
+          created_by: profile?.id ?? null,
+          private: isPrivate,
+        }),
+      'Création du canal',
+    )
+    if (!created) return
     if (isPrivate) {
       const ids = new Set([...memberIds, profile?.id ?? ''])
-      await Promise.all([...ids].filter(Boolean).map((id) => insert('channel_members', { channel_id: created.id, profile_id: id })))
+      await essayer(
+        () => Promise.all([...ids].filter(Boolean).map((id) => insert('channel_members', { channel_id: created.id, profile_id: id }))),
+        'Ajout des membres',
+      )
     }
     setShowNewChannel(false)
     refreshChannels()
@@ -267,14 +304,18 @@ export default function ChatPage() {
 
   async function toggleMember(c: Channel, profileId: string) {
     const existing = members.find((m) => m.channel_id === c.id && m.profile_id === profileId)
-    if (existing) await remove('channel_members', existing.id)
-    else await insert('channel_members', { channel_id: c.id, profile_id: profileId })
+    const ok = await essayer(async () => {
+      if (existing) await remove('channel_members', existing.id)
+      else await insert('channel_members', { channel_id: c.id, profile_id: profileId })
+      return true
+    }, existing ? 'Retrait du membre' : 'Ajout du membre')
+    if (ok === null) return
     refreshMembers()
   }
 
   async function deleteChannel(c: Channel) {
     if (!confirm(`Supprimer le canal « ${c.name} » et tous ses messages ?`)) return
-    await remove('channels', c.id)
+    if ((await essayer(() => remove('channels', c.id), 'Suppression du canal')) === null) return
     setManaging(null)
     refreshChannels()
     if (channelId === c.id) setParams({})
@@ -282,7 +323,7 @@ export default function ChatPage() {
 
   async function deleteMessage(m: Message) {
     if (!confirm('Supprimer ce message ?')) return
-    await remove('messages', m.id)
+    if ((await essayer(() => remove('messages', m.id), 'Suppression du message')) === null) return
     refreshMessages()
   }
 
