@@ -79,6 +79,10 @@ export default function ClaimPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [carrierFilter, setCarrierFilter] = useState('')
+  const [paysFilter, setPaysFilter] = useState('')
+  const [adherentFilter, setAdherentFilter] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [assigneeFilter, setAssigneeFilter] = useState('')
 
   const { rows: claims, refresh } = useTable('claims', undefined, { column: 'created_at', ascending: false })
   const { rows: events, refresh: refreshEvents } = useTable('claim_events', undefined, { column: 'created_at', ascending: true })
@@ -108,11 +112,21 @@ export default function ClaimPage() {
       (c) =>
         (!statusFilter || c.status === statusFilter) &&
         (!carrierFilter || c.carrier === carrierFilter) &&
+        (!paysFilter || c.pays === paysFilter) &&
+        (!adherentFilter || c.adherent === adherentFilter) &&
+        (!categoryFilter || c.category === categoryFilter) &&
+        (!assigneeFilter || c.assignee_id === assigneeFilter) &&
         (!q ||
           [c.ref, c.title, c.description, c.shipping_ref, c.tracking_number, c.adherent, c.client_nom, c.destinataire, c.pays, c.cf_dossier, c.prochaine_action]
             .some((s) => (s ?? '').toLowerCase().includes(q))),
     )
-  }, [claims, search, statusFilter, carrierFilter])
+  }, [claims, search, statusFilter, carrierFilter, paysFilter, adherentFilter, categoryFilter, assigneeFilter])
+
+  /** Responsables présents dans au moins un dossier. */
+  const assignees = useMemo(() => {
+    const ids = new Set(claims.map((c) => c.assignee_id).filter(Boolean))
+    return profiles.filter((p) => ids.has(p.id))
+  }, [claims, profiles])
 
   const nextRef = () => {
     const year = new Date().getFullYear()
@@ -469,10 +483,34 @@ export default function ClaimPage() {
             <option value="">Tous les statuts</option>
             {Object.entries(STATUSES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
+          <select className="input max-w-48" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+            <option value="">Tous les types</option>
+            {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
           <select className="input max-w-44" value={carrierFilter} onChange={(e) => setCarrierFilter(e.target.value)}>
             <option value="">Tous transporteurs</option>
             {CARRIERS.filter(Boolean).map((c) => <option key={c}>{c}</option>)}
           </select>
+          <select className="input max-w-40" value={paysFilter} onChange={(e) => setPaysFilter(e.target.value)}>
+            <option value="">Tous les pays</option>
+            {paysList.map((p) => <option key={p}>{p}</option>)}
+          </select>
+          <select className="input max-w-44" value={adherentFilter} onChange={(e) => setAdherentFilter(e.target.value)}>
+            <option value="">Tous les adhérents</option>
+            {adherents.map((a) => <option key={a}>{a}</option>)}
+          </select>
+          <select className="input max-w-44" value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)}>
+            <option value="">Tous les responsables</option>
+            {assignees.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+          </select>
+          {(statusFilter || categoryFilter || carrierFilter || paysFilter || adherentFilter || assigneeFilter || search) && (
+            <button
+              className="text-xs text-aura-700 underline"
+              onClick={() => { setSearch(''); setStatusFilter(''); setCategoryFilter(''); setCarrierFilter(''); setPaysFilter(''); setAdherentFilter(''); setAssigneeFilter('') }}
+            >
+              Réinitialiser
+            </button>
+          )}
         </div>
 
         {filtered.length === 0 ? (
