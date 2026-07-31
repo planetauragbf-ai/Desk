@@ -99,7 +99,7 @@ export default function LinksPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold">Liens & outils</h1>
           <p className="text-sm text-aura-700/80 mt-1">

@@ -58,7 +58,7 @@ export default function NotesPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-extrabold">Notes</h1>
         {can(profile, 'notes_ajout') && (
           <button className="btn-primary" onClick={() => setParams({ nouvelle: '1' })}>+ Ajouter une note</button>

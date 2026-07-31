@@ -101,7 +101,7 @@ export default function DocumentsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-extrabold">Documents</h1>
         <div className="flex gap-2">
           {can(profile, 'documents_dossiers') && (
@@ -152,7 +152,8 @@ export default function DocumentsPage() {
         {filtered.length === 0 ? (
           <EmptyState>Aucun document{folder ? ` dans « ${folder} »` : ''}.</EmptyState>
         ) : (
-          <table className="w-full">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px]">
             <thead>
               <tr>
                 <th className="table-head rounded-l-lg">Nom</th>
@@ -194,7 +195,8 @@ export default function DocumentsPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         )}
       </Card>
 

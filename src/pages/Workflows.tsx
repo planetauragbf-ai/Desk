@@ -55,12 +55,12 @@ export default function Workflows() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-extrabold">Base de workflows</h1>
         <button className="btn-primary" onClick={() => setParams({ nouveau: '1' })}>+ Ajouter un workflow</button>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-5">
+      <div className="grid lg:grid-cols-2 gap-5 min-w-0">
         <Card>
           {templates.length === 0 ? (
             <EmptyState>
@@ -68,7 +68,8 @@ export default function Workflows() {
               pour les rejouer sur chaque objectif.
             </EmptyState>
           ) : (
-            <table className="w-full">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px]">
               <thead>
                 <tr>
                   <th className="table-head rounded-l-lg">Workflow</th>
@@ -109,7 +110,8 @@ export default function Workflows() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
           )}
         </Card>
 
