@@ -49,7 +49,12 @@ export default function Dashboard() {
     { icon: '🗓', to: '/calendrier', module: 'calendrier', title: 'Calendrier & congés', desc: 'Planning, absences et demandes de congés' },
   ]
 
-  const visibleApps = apps.filter((a) => canAccessModule(profile, a.module))
+  const projectModules = ['objectifs', 'pilotage', 'workflows', 'notes'] as const
+  const visibleApps = apps.filter((a) =>
+    a.to === '/projets'
+      ? projectModules.some((m) => canAccessModule(profile, m))
+      : canAccessModule(profile, a.module),
+  )
   const visibleSpaces = spaces.filter((s) => canAccessModule(profile, s.module))
 
   // Un compte limité à Planet'Stock (ex. adhérent) arrive directement

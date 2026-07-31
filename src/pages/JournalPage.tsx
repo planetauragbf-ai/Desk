@@ -7,6 +7,7 @@ import { Card, EmptyState } from '../components/ui'
 
 const APP_LABELS: Record<string, string> = {
   projects: "Planet'Projects",
+  dash: "Planet'Dash",
   stock: "Planet'Stock",
   chat: 'Chat interne',
   documents: 'Documents',
@@ -19,6 +20,7 @@ const APP_LABELS: Record<string, string> = {
 
 const APP_BADGES: Record<string, string> = {
   projects: 'bg-accent-500/10 text-accent-500',
+  dash: 'bg-cyan-100 text-cyan-800',
   stock: 'bg-purple-100 text-purple-800',
   chat: 'bg-sky-100 text-sky-800',
   documents: 'bg-emerald-100 text-emerald-800',
@@ -54,6 +56,7 @@ export default function JournalPage() {
     supabase
       .from('app_state')
       .select('value')
+      .eq('key', 'pa-stock-clean2')
       .maybeSingle()
       .then(({ data }) => {
         const value = data?.value as { auditLog?: { date: string; user: string; module: string; action: string }[] } | undefined
