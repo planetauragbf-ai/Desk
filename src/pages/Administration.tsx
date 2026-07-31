@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { signalerErreur } from '../lib/erreurs'
 import { useAuth } from '../context/AuthContext'
 import { APP_INFO, useBranding, type AppKey } from '../context/BrandingContext'
 import { useTable } from '../hooks/useTable'
@@ -143,34 +144,38 @@ function CreateEmployeeModal({ instances, onClose, onCreated }: {
   const [resetSent, setResetSent] = useState(false)
 
   async function submit(e: FormEvent) {
-    e.preventDefault()
-    setBusy(true)
-    setError(null)
     try {
-      const result = await createEmployee(fullName.trim(), email.trim().toLowerCase())
-      if (result.code === 'exists') {
-        setExisting(true)
-        return
-      }
-      if (result.error) {
-        setError(result.error)
-        return
-      }
-      // Applique rôle, instance et changement de mot de passe obligatoire
-      // sur le profil créé par le trigger (tolérance au délai).
-      if (result.userId) {
-        for (let i = 0; i < 5; i++) {
-          try {
-            await update('profiles', result.userId, { role, instance_id: instanceId || null, must_change_password: true })
-            break
-          } catch {
-            await new Promise((r) => setTimeout(r, 800))
+      e.preventDefault()
+      setBusy(true)
+      setError(null)
+      try {
+        const result = await createEmployee(fullName.trim(), email.trim().toLowerCase())
+        if (result.code === 'exists') {
+          setExisting(true)
+          return
+        }
+        if (result.error) {
+          setError(result.error)
+          return
+        }
+        // Applique rôle, instance et changement de mot de passe obligatoire
+        // sur le profil créé par le trigger (tolérance au délai).
+        if (result.userId) {
+          for (let i = 0; i < 5; i++) {
+            try {
+              await update('profiles', result.userId, { role, instance_id: instanceId || null, must_change_password: true })
+              break
+            } catch {
+              await new Promise((r) => setTimeout(r, 800))
+            }
           }
         }
+        setTempPassword(result.tempPassword ?? null)
+      } finally {
+        setBusy(false)
       }
-      setTempPassword(result.tempPassword ?? null)
-    } finally {
-      setBusy(false)
+    } catch (err) {
+      signalerErreur(err, 'Enregistrement du compte')
     }
   }
 
@@ -299,34 +304,42 @@ function BrandingCard() {
   const [error, setError] = useState<string | null>(null)
 
   async function onFile(app: AppKey, e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    setBusy(app)
-    setMessage(null)
-    setError(null)
     try {
-      await setLogo(app, file)
-      setMessage(`Logo ${APP_INFO[app].name} mis à jour. Il s’applique immédiatement pour tous les utilisateurs.`)
+      const file = e.target.files?.[0]
+      e.target.value = ''
+      if (!file) return
+      setBusy(app)
+      setMessage(null)
+      setError(null)
+      try {
+        await setLogo(app, file)
+        setMessage(`Logo ${APP_INFO[app].name} mis à jour. Il s’applique immédiatement pour tous les utilisateurs.`)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setBusy(null)
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(null)
+      signalerErreur(err, 'Envoi du logo')
     }
   }
 
   async function onReset(app: AppKey) {
-    if (!confirm(`Revenir au logo par défaut de ${APP_INFO[app].name} ?`)) return
-    setBusy(app)
-    setMessage(null)
-    setError(null)
     try {
-      await resetLogo(app)
-      setMessage(`Logo par défaut de ${APP_INFO[app].name} restauré.`)
+      if (!confirm(`Revenir au logo par défaut de ${APP_INFO[app].name} ?`)) return
+      setBusy(app)
+      setMessage(null)
+      setError(null)
+      try {
+        await resetLogo(app)
+        setMessage(`Logo par défaut de ${APP_INFO[app].name} restauré.`)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setBusy(null)
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(null)
+      signalerErreur(err, 'Réinitialisation du logo')
     }
   }
 
@@ -387,18 +400,22 @@ function IntegrationsCard() {
   }, [])
 
   async function save() {
-    setBusy(true)
-    setMessage(null)
-    setError(null)
     try {
-      if (!supabase) return
-      const v = value.trim()
-      const { error: err } = await supabase.from('app_secrets')
-        .upsert({ key: 'ship24_api_key', value: v, updated_at: new Date().toISOString() })
-      if (err) setError(err.message)
-      else setMessage(v ? 'Clé enregistrée (accessible aux seuls administrateurs).' : 'Clé effacée.')
-    } finally {
-      setBusy(false)
+      setBusy(true)
+      setMessage(null)
+      setError(null)
+      try {
+        if (!supabase) return
+        const v = value.trim()
+        const { error: err } = await supabase.from('app_secrets')
+          .upsert({ key: 'ship24_api_key', value: v, updated_at: new Date().toISOString() })
+        if (err) setError(err.message)
+        else setMessage(v ? 'Clé enregistrée (accessible aux seuls administrateurs).' : 'Clé effacée.')
+      } finally {
+        setBusy(false)
+      }
+    } catch (err) {
+      signalerErreur(err, 'Enregistrement')
     }
   }
 
@@ -476,39 +493,43 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
   }
 
   async function save() {
-    setBusy(true)
     try {
-      const stock_access: StockAccess | null =
-        role === 'admin' || stockRole === 'defaut'
-          ? null
-          : stockRole === 'logisticien'
-            ? { role: 'logisticien', permissions: stockPerms }
-            : stockRole === 'adherent'
-              ? { role: 'adherent', adherent_id: adherentId.trim() || null }
-              : { role: 'admin' }
-      await update('profiles', user.id, {
-        role,
-        instance_id: instanceId || null,
-        modules: role === 'admin' || allModules ? null : moduleKeys,
-        stock_access,
-        perms: role === 'admin' || Object.keys(perms).length === 0 ? null : perms,
-        disabled: isSelf ? false : disabled,
-        is_compta: isCompta,
-        cp_droits: Number(cpDroits) || 25,
-      })
-      // Synchroniser les projets accordés.
-      const existing = memberRows.filter((m) => m.profile_id === user.id)
-      for (const m of existing) {
-        if (!projects.includes(m.objective_id)) await remove('objective_members', m.id)
-      }
-      for (const objectiveId of projects) {
-        if (!existing.some((m) => m.objective_id === objectiveId)) {
-          await insert('objective_members', { objective_id: objectiveId, profile_id: user.id })
+      setBusy(true)
+      try {
+        const stock_access: StockAccess | null =
+          role === 'admin' || stockRole === 'defaut'
+            ? null
+            : stockRole === 'logisticien'
+              ? { role: 'logisticien', permissions: stockPerms }
+              : stockRole === 'adherent'
+                ? { role: 'adherent', adherent_id: adherentId.trim() || null }
+                : { role: 'admin' }
+        await update('profiles', user.id, {
+          role,
+          instance_id: instanceId || null,
+          modules: role === 'admin' || allModules ? null : moduleKeys,
+          stock_access,
+          perms: role === 'admin' || Object.keys(perms).length === 0 ? null : perms,
+          disabled: isSelf ? false : disabled,
+          is_compta: isCompta,
+          cp_droits: Number(cpDroits) || 25,
+        })
+        // Synchroniser les projets accordés.
+        const existing = memberRows.filter((m) => m.profile_id === user.id)
+        for (const m of existing) {
+          if (!projects.includes(m.objective_id)) await remove('objective_members', m.id)
         }
+        for (const objectiveId of projects) {
+          if (!existing.some((m) => m.objective_id === objectiveId)) {
+            await insert('objective_members', { objective_id: objectiveId, profile_id: user.id })
+          }
+        }
+        onSaved()
+      } finally {
+        setBusy(false)
       }
-      onSaved()
-    } finally {
-      setBusy(false)
+    } catch (err) {
+      signalerErreur(err, 'Enregistrement')
     }
   }
 

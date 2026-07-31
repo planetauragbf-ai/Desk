@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useUnread } from '../hooks/useUnread'
+import { totalUnread } from '../lib/chat'
 import { demoMode } from '../lib/data'
 import { canAccessModule, type ModuleKey } from '../lib/permissions'
 import { useBranding } from '../context/BrandingContext'
 import type { Profile } from '../lib/types'
 import { Avatar } from './ui'
+import ChatToasts from './ChatToasts'
 import NotificationsBell from './NotificationsBell'
 
 interface NavItem {
@@ -13,6 +16,8 @@ interface NavItem {
   label: string
   icon: string
   module?: ModuleKey
+  /** Pastille de messages non lus (chat). */
+  badge?: number
 }
 
 // Planet'Desk : le portail (espaces communs) héberge les applications,
@@ -125,9 +130,27 @@ function usePersistedBool(key: string, initial: boolean): [boolean, (v: boolean)
 }
 
 const itemClass = (active: boolean, mini: boolean) =>
-  `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+  `relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
     mini ? 'justify-center px-0' : ''
   } ${active ? 'bg-accent-500/10 text-accent-500' : 'text-aura-700 hover:bg-aura-50 hover:text-aura-900'}`
+
+/** Pastille rouge « 1, 2, 3… » des messages non lus. */
+function Badge({ n, mini }: { n?: number; mini: boolean }) {
+  if (!n) return null
+  const texte = n > 99 ? '99+' : String(n)
+  if (mini) {
+    return (
+      <span className="absolute top-0.5 right-1 rounded-full bg-coral-600 px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">
+        {texte}
+      </span>
+    )
+  }
+  return (
+    <span className="ml-auto rounded-full bg-coral-600 px-2 py-0.5 text-[11px] font-bold text-white leading-none">
+      {texte}
+    </span>
+  )
+}
 
 function NavItems({ items, mini, onNavigate }: { items: NavItem[]; mini: boolean; onNavigate?: () => void }) {
   const { pathname, search } = useLocation()
@@ -145,6 +168,7 @@ function NavItems({ items, mini, onNavigate }: { items: NavItem[]; mini: boolean
             <Link key={item.to} to={item.to} title={item.label} onClick={onNavigate} className={itemClass(active, mini)}>
               <span className="text-base w-5 text-center shrink-0">{item.icon}</span>
               {!mini && item.label}
+              <Badge n={item.badge} mini={mini} />
             </Link>
           )
         }
@@ -158,6 +182,7 @@ function NavItems({ items, mini, onNavigate }: { items: NavItem[]; mini: boolean
           >
             <span className="text-base w-5 text-center shrink-0">{item.icon}</span>
             {!mini && item.label}
+            <Badge n={item.badge} mini={mini} />
           </NavLink>
         )
       })}
@@ -269,7 +294,11 @@ export default function Layout() {
 
   const visible = (items: NavItem[]) =>
     items.filter((item) => !item.module || canAccessModule(profile, item.module))
-  const deskItems = visible(DESK_NAV)
+  // Pastille « Chat interne » : total des messages non lus, rafraîchi en
+  // temps réel et à chaque changement de page (une conversation ouverte
+  // remet son compteur à zéro).
+  const nonLus = totalUnread(useUnread(profile?.id, pathname + search))
+  const deskItems = visible(DESK_NAV).map((i) => (i.to === '/chat' ? { ...i, badge: nonLus } : i))
   const projectItems = visible(PROJECTS_NAV)
   const dashItems = visible(DASH_NAV)
   const stockGroups = stockNav(profile)
@@ -421,6 +450,9 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Nouveau message : fenêtre en bas à droite, sur toutes les pages. */}
+      <ChatToasts />
     </div>
   )
 }

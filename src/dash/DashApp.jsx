@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { loadDash, saveDash } from "./storage.js";
+import { loadDash, rechargerDash, saveDash, surConflitDash } from "./storage.js";
 import { logDash, loadShip24Key, getShip24Key, createClaimFromShipping, runDashAlerts } from "./integration.js";
 import { loadAdherents, mergeAdherentNames } from "../lib/adherents";
 
@@ -350,6 +350,23 @@ export default function App() {
     saveDash({ shippings, prodSheets });
   }, [shippings, prodSheets, dashLoaded]);
 
+  // Quelqu'un d'autre a enregistré pendant que nous travaillions : plutôt
+  // que d'écraser son travail en silence, on le signale et on propose de
+  // recharger la version à jour.
+  const [conflit, setConflit] = useState(false);
+  useEffect(() => surConflitDash(() => setConflit(true)), []);
+  const reprendreVersionDistante = async () => {
+    const d = await rechargerDash();
+    if (d) {
+      if (Array.isArray(d.shippings)) setShippings(d.shippings);
+      if (Array.isArray(d.prodSheets) && d.prodSheets.length) {
+        setProdSheets(d.prodSheets);
+        setActiveProdSheet(d.prodSheets[0]);
+      }
+    }
+    setConflit(false);
+  };
+
   const activeDashboard = mainTab === "usa" ? usaTab : mainTab;
   const isProd = activeDashboard === "usa_prod";
 
@@ -479,6 +496,18 @@ const handleSync = () => { alert("Le suivi automatique Ship24 n'est pas encore r
         .row-hover:hover { background: var(--bg3) !important; }
         .edit-hover:hover { outline: 1px dashed var(--b1); outline-offset: 1px; border-radius: 3px; }
       `}</style>
+
+      {/* Écriture concurrente : on prévient au lieu d'écraser en silence. */}
+      {conflit && (
+        <div style={{ padding: "10px 24px", background: "#fef3c7", color: "#92400e", fontSize: 13, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 700 }}>⚠️ Quelqu'un d'autre a enregistré des modifications.</span>
+          <span>Vos dernières saisies n'ont pas été envoyées, pour ne pas écraser son travail.</span>
+          <button onClick={reprendreVersionDistante}
+            style={{ marginLeft: "auto", padding: "5px 12px", borderRadius: 7, border: "none", background: "#92400e", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+            Recharger la version à jour
+          </button>
+        </div>
+      )}
 
       {/* ── TOP BAR ── */}
       <div style={{ padding: "9px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--b1)", background: "var(--bg2)" }}>

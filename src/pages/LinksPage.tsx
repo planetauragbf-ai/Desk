@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { signalerErreur } from '../lib/erreurs'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { insert, remove, update } from '../lib/data'
@@ -44,57 +45,73 @@ export default function LinksPage() {
   }, [links, search, allCategories])
 
   async function createCategory() {
-    const name = prompt('Nom de la nouvelle catégorie :')?.trim()
-    if (!name) return
-    if (allCategories.includes(name)) return alert('Cette catégorie existe déjà.')
-    await insert('folders', { kind: 'liens', name })
-    refreshFolders()
+    try {
+      const name = prompt('Nom de la nouvelle catégorie :')?.trim()
+      if (!name) return
+      if (allCategories.includes(name)) return alert('Cette catégorie existe déjà.')
+      await insert('folders', { kind: 'liens', name })
+      refreshFolders()
+    } catch (err) {
+      signalerErreur(err, 'Création de la catégorie')
+    }
   }
 
   async function renameCategory(oldName: string) {
-    const name = prompt(`Renommer la catégorie « ${oldName} » en :`, oldName)?.trim()
-    if (!name || name === oldName) return
-    if (allCategories.includes(name)) return alert('Une catégorie porte déjà ce nom.')
-    const row = folderRows.find((f) => f.name === oldName)
-    if (row) await update('folders', row.id, { name })
-    else await insert('folders', { kind: 'liens', name })
-    await Promise.all(links.filter((l) => l.category === oldName).map((l) => update('links', l.id, { category: name })))
-    refreshFolders()
-    refresh()
+    try {
+      const name = prompt(`Renommer la catégorie « ${oldName} » en :`, oldName)?.trim()
+      if (!name || name === oldName) return
+      if (allCategories.includes(name)) return alert('Une catégorie porte déjà ce nom.')
+      const row = folderRows.find((f) => f.name === oldName)
+      if (row) await update('folders', row.id, { name })
+      else await insert('folders', { kind: 'liens', name })
+      await Promise.all(links.filter((l) => l.category === oldName).map((l) => update('links', l.id, { category: name })))
+      refreshFolders()
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Renommage de la catégorie')
+    }
   }
 
   async function deleteCategory(name: string) {
-    const count = links.filter((l) => l.category === name).length
-    if (!confirm(count
-      ? `Supprimer la catégorie « ${name} » ? Ses ${count} lien(s) seront déplacés dans « Général ».`
-      : `Supprimer la catégorie « ${name} » ?`)) return
-    await Promise.all(links.filter((l) => l.category === name).map((l) => update('links', l.id, { category: 'Général' })))
-    const row = folderRows.find((f) => f.name === name)
-    if (row) await remove('folders', row.id)
-    refreshFolders()
-    refresh()
+    try {
+      const count = links.filter((l) => l.category === name).length
+      if (!confirm(count
+        ? `Supprimer la catégorie « ${name} » ? Ses ${count} lien(s) seront déplacés dans « Général ».`
+        : `Supprimer la catégorie « ${name} » ?`)) return
+      await Promise.all(links.filter((l) => l.category === name).map((l) => update('links', l.id, { category: 'Général' })))
+      const row = folderRows.find((f) => f.name === name)
+      if (row) await remove('folders', row.id)
+      refreshFolders()
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Suppression de la catégorie')
+    }
   }
 
   async function saveLink(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    let url = String(fd.get('url')).trim()
-    if (!/^https?:\/\//i.test(url)) url = `https://${url}`
-    const payload = {
-      label: String(fd.get('label')),
-      url,
-      description: String(fd.get('description') ?? ''),
-      category: String(fd.get('category')).trim() || 'Général',
-      emoji: String(fd.get('emoji')).trim() || '🔗',
+    try {
+      e.preventDefault()
+      const fd = new FormData(e.currentTarget)
+      let url = String(fd.get('url')).trim()
+      if (!/^https?:\/\//i.test(url)) url = `https://${url}`
+      const payload = {
+        label: String(fd.get('label')),
+        url,
+        description: String(fd.get('description') ?? ''),
+        category: String(fd.get('category')).trim() || 'Général',
+        emoji: String(fd.get('emoji')).trim() || '🔗',
+      }
+      if (editing) {
+        await update('links', editing.id, payload)
+        setEditing(null)
+      } else {
+        await insert('links', { ...payload, author_id: profile?.id ?? null })
+        setShowNew(false)
+      }
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Enregistrement du lien')
     }
-    if (editing) {
-      await update('links', editing.id, payload)
-      setEditing(null)
-    } else {
-      await insert('links', { ...payload, author_id: profile?.id ?? null })
-      setShowNew(false)
-    }
-    refresh()
   }
 
   return (

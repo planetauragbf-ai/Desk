@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { signalerErreur } from '../lib/erreurs'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { insert, remove, update } from '../lib/data'
@@ -6,8 +7,8 @@ import { supabase } from '../lib/supabase'
 import { notify } from '../lib/notify'
 import { loadAdherents, mergeAdherentNames, type AdherentRef } from '../lib/adherents'
 import { formatDate, formatDateTime, profileName } from '../lib/format'
-import type { Claim, ClaimCategory, ClaimStatus, Priority } from '../lib/types'
-import { Card, EmptyState, Modal, StatTile } from '../components/ui'
+import type { Claim, ClaimCategory, ClaimStatus, Priority, Profile } from '../lib/types'
+import { Card, EmptyState, Modal, Skeleton, StatTile } from '../components/ui'
 
 const CATEGORIES: Record<ClaimCategory, string> = {
   casse: '🍷 Casse',
@@ -73,6 +74,183 @@ const F = ({ label, children, full = false }: { label: string; children: React.R
   </div>
 )
 
+/**
+ * Formulaire commun (création et fiche) : toutes les sections du suivi PA.
+ *
+ * Défini au premier niveau du module, et NON à l'intérieur de ClaimPage :
+ * une fonction recréée à chaque rendu est un nouveau type de composant pour
+ * React, qui démontait puis remontait tout le formulaire. La saisie en cours
+ * était perdue au moindre rendu — réception d'un message, rafraîchissement
+ * temps réel, changement de filtre.
+ */
+function ClaimForm({ c, onSubmit, submitLabel, profiles, defaultAssignee }: {
+  c: Partial<Claim>
+  onSubmit: (e: FormEvent<HTMLFormElement>) => void
+  submitLabel: string
+  profiles: Profile[]
+  defaultAssignee: string
+}) {
+  return (
+    <form onSubmit={onSubmit} className="grid grid-cols-2 gap-3">
+      <Section title="Identification" />
+      <F label="Titre du dossier *" full>
+        <input name="title" className="input" required defaultValue={c.title ?? ''} placeholder="ex. 6 btl cassées — commande 6060 UPS" />
+      </F>
+      <F label="Type">
+        <select name="category" className="input" defaultValue={c.category ?? 'casse'}>
+          {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+      </F>
+      <F label="Urgence">
+        <select name="priority" className="input" defaultValue={c.priority ?? 'moyenne'}>
+          {Object.entries(PRIORITIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+      </F>
+      <F label="Responsable" full>
+        <select name="assignee_id" className="input" defaultValue={c.assignee_id ?? defaultAssignee}>
+          <option value="">—</option>
+          {profiles.filter((p) => !p.disabled).map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+        </select>
+      </F>
+
+      <Section title="Client" />
+      <F label="Nom client">
+        <input name="client_nom" className="input" list="claim-clients" defaultValue={c.client_nom ?? ''} />
+      </F>
+      <F label="Pays">
+        <input name="pays" className="input" list="claim-pays" defaultValue={c.pays ?? ''} />
+      </F>
+      <F label="Email">
+        <input type="email" name="client_email" className="input" defaultValue={c.client_email ?? ''} />
+      </F>
+      <F label="Téléphone">
+        <input name="client_tel" className="input" defaultValue={c.client_tel ?? ''} />
+      </F>
+
+      <Section title="Commande" />
+      <F label="N° shipping PA">
+        <input name="shipping_ref" className="input" defaultValue={c.shipping_ref ?? ''} placeholder="ex. 6060" />
+      </F>
+      <F label="Adhérent">
+        <input name="adherent" className="input" list="claim-adherents" defaultValue={c.adherent ?? ''} />
+      </F>
+      <F label="Date expédition">
+        <input type="date" name="date_expedition" className="input" defaultValue={c.date_expedition ?? ''} />
+      </F>
+      <F label="Date livraison">
+        <input type="date" name="date_livraison" className="input" defaultValue={c.date_livraison ?? ''} />
+      </F>
+      <F label="Valeur commande (€)">
+        <input type="number" step="0.01" name="valeur_commande" className="input" defaultValue={c.valeur_commande || ''} />
+      </F>
+
+      <Section title="Transport" />
+      <F label="Transporteur">
+        <select name="carrier" className="input" defaultValue={c.carrier ?? ''}>
+          {CARRIERS.map((t) => <option key={t} value={t}>{t || '—'}</option>)}
+        </select>
+      </F>
+      <F label="N° tracking">
+        <input name="tracking_number" className="input" defaultValue={c.tracking_number ?? ''} />
+      </F>
+      <F label="Lien suivi">
+        <input name="lien_suivi" className="input" defaultValue={c.lien_suivi ?? ''} placeholder="https://…" />
+      </F>
+      <F label="Lien transporteur">
+        <input name="lien_transporteur" className="input" defaultValue={c.lien_transporteur ?? ''} placeholder="https://…" />
+      </F>
+
+      <Section title="Sinistre" />
+      <F label="Date constat">
+        <input type="date" name="date_incident" className="input" defaultValue={c.date_incident ?? ''} />
+      </F>
+      <F label="Nb btl. concernées">
+        <input type="number" name="nb_bouteilles" className="input" defaultValue={c.nb_bouteilles || ''} />
+      </F>
+      <F label="Préjudice estimé (€)">
+        <input type="number" step="0.01" name="montant_estime" className="input" defaultValue={c.montant_estime || ''} />
+      </F>
+      <F label="Lien dossier drive">
+        <input name="lien_drive" className="input" defaultValue={c.lien_drive ?? ''} placeholder="https://drive.google.com/…" />
+      </F>
+      <F label="Description" full>
+        <textarea name="description" className="input" rows={2} defaultValue={c.description ?? ''} placeholder="Circonstances, constat…" />
+      </F>
+
+      <Section title="Réserves & recours transporteur" />
+      <F label="Réserves émises">
+        <input name="reserves" className="input" defaultValue={c.reserves ?? ''} placeholder="ex. Oui — mention CMR" />
+      </F>
+      <F label="Date limite réclamation">
+        <input type="date" name="deadline" className="input" defaultValue={c.deadline ?? ''} />
+      </F>
+      <F label="LRAR envoyée le">
+        <input type="date" name="lrar_le" className="input" defaultValue={c.lrar_le ?? ''} />
+      </F>
+      <F label="AR reçu le">
+        <input type="date" name="ar_le" className="input" defaultValue={c.ar_le ?? ''} />
+      </F>
+      <F label="Réponse transporteur" full>
+        <input name="reponse_transporteur" className="input" defaultValue={c.reponse_transporteur ?? ''} />
+      </F>
+
+      <Section title="Coste Fermon (assureur)" />
+      <F label="Assureur">
+        <input name="assureur" className="input" defaultValue={c.assureur ?? 'Coste Fermon'} />
+      </F>
+      <F label="Statut CF">
+        <select name="cf_statut" className="input" defaultValue={c.cf_statut ?? ''}>
+          {CF_STATUTS.map((s) => <option key={s} value={s}>{s || '—'}</option>)}
+        </select>
+      </F>
+      <F label="Date déclaration CF">
+        <input type="date" name="cf_declaration" className="input" defaultValue={c.cf_declaration ?? ''} />
+      </F>
+      <F label="N° dossier CF">
+        <input name="cf_dossier" className="input" defaultValue={c.cf_dossier ?? ''} />
+      </F>
+      <F label="Interlocuteur CF">
+        <input name="cf_interlocuteur" className="input" defaultValue={c.cf_interlocuteur ?? ''} />
+      </F>
+      <F label="Dernière relance CF">
+        <input type="date" name="cf_relance" className="input" defaultValue={c.cf_relance ?? ''} />
+      </F>
+
+      <Section title="Indemnisation" />
+      <F label="Montant proposé (€)">
+        <input type="number" step="0.01" name="montant_propose" className="input" defaultValue={c.montant_propose || ''} />
+      </F>
+      <F label="Date accord">
+        <input type="date" name="date_accord" className="input" defaultValue={c.date_accord ?? ''} />
+      </F>
+      <F label="Montant versé (€)">
+        <input type="number" step="0.01" name="montant_recupere" className="input" defaultValue={c.montant_recupere || ''} />
+      </F>
+      <F label="Date versement">
+        <input type="date" name="date_versement" className="input" defaultValue={c.date_versement ?? ''} />
+      </F>
+      <div className="col-span-2 text-xs text-aura-700/80">
+        Reste à charge PA : <b>{eur((c.montant_estime || 0) - (c.montant_recupere || 0))}</b> (préjudice − versé, recalculé après enregistrement)
+      </div>
+
+      <Section title="Prochaine action" />
+      <F label="Prochaine action">
+        <input name="prochaine_action" className="input" defaultValue={c.prochaine_action ?? ''} placeholder="ex. Relancer CF, envoyer LRAR…" />
+      </F>
+      <F label="Échéance">
+        <input type="date" name="action_echeance" className="input" defaultValue={c.action_echeance ?? ''} />
+      </F>
+      <F label="Notes" full>
+        <textarea name="notes" className="input" rows={2} defaultValue={c.notes ?? ''} />
+      </F>
+
+      <div className="col-span-2 flex justify-end gap-2 pt-1">
+        <button type="submit" className="btn-primary">{submitLabel}</button>
+      </div>
+    </form>
+  )
+}
+
 export default function ClaimPage() {
   const { profile } = useAuth()
   const [showNew, setShowNew] = useState(false)
@@ -85,7 +263,7 @@ export default function ClaimPage() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [assigneeFilter, setAssigneeFilter] = useState('')
 
-  const { rows: claims, refresh } = useTable('claims', undefined, { column: 'created_at', ascending: false })
+  const { rows: claims, refresh, loading } = useTable('claims', undefined, { column: 'created_at', ascending: false })
   const { rows: events, refresh: refreshEvents } = useTable('claim_events', undefined, { column: 'created_at', ascending: true })
   const { rows: profiles } = useTable('profiles', undefined, { column: 'full_name', ascending: true })
 
@@ -145,15 +323,19 @@ export default function ClaimPage() {
   }
 
   async function addEvent(claimId: string, kind: 'commentaire' | 'statut' | 'document', content: string, file?: { url: string; name: string }) {
-    await insert('claim_events', {
-      claim_id: claimId,
-      author_id: profile?.id ?? null,
-      kind,
-      content,
-      file_url: file?.url ?? null,
-      file_name: file?.name ?? null,
-    })
-    refreshEvents()
+    try {
+      await insert('claim_events', {
+        claim_id: claimId,
+        author_id: profile?.id ?? null,
+        kind,
+        content,
+        file_url: file?.url ?? null,
+        file_name: file?.name ?? null,
+      })
+      refreshEvents()
+    } catch (err) {
+      signalerErreur(err, 'Ajout au suivi')
+    }
   }
 
   const fdStr = (fd: FormData, k: string) => String(fd.get(k) ?? '')
@@ -206,64 +388,84 @@ export default function ClaimPage() {
   }
 
   async function createClaim(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fields = collectFields(new FormData(e.currentTarget))
-    const created = await insert('claims', {
-      ...fields,
-      ref: nextRef(),
-      kind: 'sinistre',
-      status: 'nouveau',
-      created_by: profile?.id ?? null,
-    })
-    await addEvent(created.id, 'statut', 'Dossier ouvert')
-    if (fields.assignee_id && fields.assignee_id !== profile?.id) {
-      await notify(fields.assignee_id, `🛡 Dossier ${created.ref} « ${created.title} » vous a été attribué`, '/claim')
+    try {
+      e.preventDefault()
+      const fields = collectFields(new FormData(e.currentTarget))
+      const created = await insert('claims', {
+        ...fields,
+        ref: nextRef(),
+        kind: 'sinistre',
+        status: 'nouveau',
+        created_by: profile?.id ?? null,
+      })
+      await addEvent(created.id, 'statut', 'Dossier ouvert')
+      if (fields.assignee_id && fields.assignee_id !== profile?.id) {
+        await notify(fields.assignee_id, `🛡 Dossier ${created.ref} « ${created.title} » vous a été attribué`, '/claim')
+      }
+      setShowNew(false)
+      refresh()
+      setDetailId(created.id)
+    } catch (err) {
+      signalerErreur(err, 'Création du dossier')
     }
-    setShowNew(false)
-    refresh()
-    setDetailId(created.id)
   }
 
   async function saveDetail(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (!detail) return
-    await update('claims', detail.id, collectFields(new FormData(e.currentTarget)))
-    refresh()
+    try {
+      e.preventDefault()
+      if (!detail) return
+      await update('claims', detail.id, collectFields(new FormData(e.currentTarget)))
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Enregistrement du dossier')
+    }
   }
 
   async function changeStatus(c: Claim, status: ClaimStatus) {
-    const closed = status === 'clos' || status === 'accepte' || status === 'refuse'
-    await update('claims', c.id, { status, closed_at: closed ? new Date().toISOString() : null })
-    await addEvent(c.id, 'statut', `Statut : ${STATUSES[c.status].label} → ${STATUSES[status].label}`)
-    if (c.assignee_id && c.assignee_id !== profile?.id) {
-      await notify(c.assignee_id, `🛡 ${c.ref} : ${STATUSES[status].label}`, '/claim')
+    try {
+      const closed = status === 'clos' || status === 'accepte' || status === 'refuse'
+      await update('claims', c.id, { status, closed_at: closed ? new Date().toISOString() : null })
+      await addEvent(c.id, 'statut', `Statut : ${STATUSES[c.status].label} → ${STATUSES[status].label}`)
+      if (c.assignee_id && c.assignee_id !== profile?.id) {
+        await notify(c.assignee_id, `🛡 ${c.ref} : ${STATUSES[status].label}`, '/claim')
+      }
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Changement de statut')
     }
-    refresh()
   }
 
   async function uploadDocs(e: ChangeEvent<HTMLInputElement>) {
-    const files = [...(e.target.files ?? [])]
-    e.target.value = ''
-    if (!files.length || !detail) return
-    for (const file of files) {
-      try {
-        const up = await uploadClaimFile(file)
-        await addEvent(detail.id, 'document', up.name, up)
-      } catch (err) {
-        alert(err instanceof Error ? err.message : String(err))
-        break
+    try {
+      const files = [...(e.target.files ?? [])]
+      e.target.value = ''
+      if (!files.length || !detail) return
+      for (const file of files) {
+        try {
+          const up = await uploadClaimFile(file)
+          await addEvent(detail.id, 'document', up.name, up)
+        } catch (err) {
+          alert(err instanceof Error ? err.message : String(err))
+          break
+        }
       }
+    } catch (err) {
+      signalerErreur(err, 'Envoi des documents')
     }
   }
 
   async function addComment(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (!detail) return
-    const fd = new FormData(e.currentTarget)
-    const content = String(fd.get('comment')).trim()
-    if (!content) return
-    e.currentTarget.reset()
-    await addEvent(detail.id, 'commentaire', content)
+    try {
+      e.preventDefault()
+      if (!detail) return
+      const fd = new FormData(e.currentTarget)
+      const content = String(fd.get('comment')).trim()
+      if (!content) return
+      e.currentTarget.reset()
+      await addEvent(detail.id, 'commentaire', content)
+    } catch (err) {
+      signalerErreur(err, 'Ajout du commentaire')
+    }
   }
 
   function exportCsv() {
@@ -279,169 +481,6 @@ export default function ClaimPage() {
 
   const detailEvents = events.filter((ev) => ev.claim_id === detailId)
   const detailDocs = detailEvents.filter((ev) => ev.kind === 'document' && ev.file_url)
-
-  /** Formulaire commun (création et fiche) : toutes les sections du suivi PA. */
-  function ClaimForm({ c, onSubmit, submitLabel }: { c: Partial<Claim>; onSubmit: (e: FormEvent<HTMLFormElement>) => void; submitLabel: string }) {
-    return (
-      <form onSubmit={onSubmit} className="grid grid-cols-2 gap-3">
-        <Section title="Identification" />
-        <F label="Titre du dossier *" full>
-          <input name="title" className="input" required defaultValue={c.title ?? ''} placeholder="ex. 6 btl cassées — commande 6060 UPS" />
-        </F>
-        <F label="Type">
-          <select name="category" className="input" defaultValue={c.category ?? 'casse'}>
-            {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-        </F>
-        <F label="Urgence">
-          <select name="priority" className="input" defaultValue={c.priority ?? 'moyenne'}>
-            {Object.entries(PRIORITIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-        </F>
-        <F label="Responsable" full>
-          <select name="assignee_id" className="input" defaultValue={c.assignee_id ?? profile?.id ?? ''}>
-            <option value="">—</option>
-            {profiles.filter((p) => !p.disabled).map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-          </select>
-        </F>
-
-        <Section title="Client" />
-        <F label="Nom client">
-          <input name="client_nom" className="input" list="claim-clients" defaultValue={c.client_nom ?? ''} />
-        </F>
-        <F label="Pays">
-          <input name="pays" className="input" list="claim-pays" defaultValue={c.pays ?? ''} />
-        </F>
-        <F label="Email">
-          <input type="email" name="client_email" className="input" defaultValue={c.client_email ?? ''} />
-        </F>
-        <F label="Téléphone">
-          <input name="client_tel" className="input" defaultValue={c.client_tel ?? ''} />
-        </F>
-
-        <Section title="Commande" />
-        <F label="N° shipping PA">
-          <input name="shipping_ref" className="input" defaultValue={c.shipping_ref ?? ''} placeholder="ex. 6060" />
-        </F>
-        <F label="Adhérent">
-          <input name="adherent" className="input" list="claim-adherents" defaultValue={c.adherent ?? ''} />
-        </F>
-        <F label="Date expédition">
-          <input type="date" name="date_expedition" className="input" defaultValue={c.date_expedition ?? ''} />
-        </F>
-        <F label="Date livraison">
-          <input type="date" name="date_livraison" className="input" defaultValue={c.date_livraison ?? ''} />
-        </F>
-        <F label="Valeur commande (€)">
-          <input type="number" step="0.01" name="valeur_commande" className="input" defaultValue={c.valeur_commande || ''} />
-        </F>
-
-        <Section title="Transport" />
-        <F label="Transporteur">
-          <select name="carrier" className="input" defaultValue={c.carrier ?? ''}>
-            {CARRIERS.map((t) => <option key={t} value={t}>{t || '—'}</option>)}
-          </select>
-        </F>
-        <F label="N° tracking">
-          <input name="tracking_number" className="input" defaultValue={c.tracking_number ?? ''} />
-        </F>
-        <F label="Lien suivi">
-          <input name="lien_suivi" className="input" defaultValue={c.lien_suivi ?? ''} placeholder="https://…" />
-        </F>
-        <F label="Lien transporteur">
-          <input name="lien_transporteur" className="input" defaultValue={c.lien_transporteur ?? ''} placeholder="https://…" />
-        </F>
-
-        <Section title="Sinistre" />
-        <F label="Date constat">
-          <input type="date" name="date_incident" className="input" defaultValue={c.date_incident ?? ''} />
-        </F>
-        <F label="Nb btl. concernées">
-          <input type="number" name="nb_bouteilles" className="input" defaultValue={c.nb_bouteilles || ''} />
-        </F>
-        <F label="Préjudice estimé (€)">
-          <input type="number" step="0.01" name="montant_estime" className="input" defaultValue={c.montant_estime || ''} />
-        </F>
-        <F label="Lien dossier drive">
-          <input name="lien_drive" className="input" defaultValue={c.lien_drive ?? ''} placeholder="https://drive.google.com/…" />
-        </F>
-        <F label="Description" full>
-          <textarea name="description" className="input" rows={2} defaultValue={c.description ?? ''} placeholder="Circonstances, constat…" />
-        </F>
-
-        <Section title="Réserves & recours transporteur" />
-        <F label="Réserves émises">
-          <input name="reserves" className="input" defaultValue={c.reserves ?? ''} placeholder="ex. Oui — mention CMR" />
-        </F>
-        <F label="Date limite réclamation">
-          <input type="date" name="deadline" className="input" defaultValue={c.deadline ?? ''} />
-        </F>
-        <F label="LRAR envoyée le">
-          <input type="date" name="lrar_le" className="input" defaultValue={c.lrar_le ?? ''} />
-        </F>
-        <F label="AR reçu le">
-          <input type="date" name="ar_le" className="input" defaultValue={c.ar_le ?? ''} />
-        </F>
-        <F label="Réponse transporteur" full>
-          <input name="reponse_transporteur" className="input" defaultValue={c.reponse_transporteur ?? ''} />
-        </F>
-
-        <Section title="Coste Fermon (assureur)" />
-        <F label="Assureur">
-          <input name="assureur" className="input" defaultValue={c.assureur ?? 'Coste Fermon'} />
-        </F>
-        <F label="Statut CF">
-          <select name="cf_statut" className="input" defaultValue={c.cf_statut ?? ''}>
-            {CF_STATUTS.map((s) => <option key={s} value={s}>{s || '—'}</option>)}
-          </select>
-        </F>
-        <F label="Date déclaration CF">
-          <input type="date" name="cf_declaration" className="input" defaultValue={c.cf_declaration ?? ''} />
-        </F>
-        <F label="N° dossier CF">
-          <input name="cf_dossier" className="input" defaultValue={c.cf_dossier ?? ''} />
-        </F>
-        <F label="Interlocuteur CF">
-          <input name="cf_interlocuteur" className="input" defaultValue={c.cf_interlocuteur ?? ''} />
-        </F>
-        <F label="Dernière relance CF">
-          <input type="date" name="cf_relance" className="input" defaultValue={c.cf_relance ?? ''} />
-        </F>
-
-        <Section title="Indemnisation" />
-        <F label="Montant proposé (€)">
-          <input type="number" step="0.01" name="montant_propose" className="input" defaultValue={c.montant_propose || ''} />
-        </F>
-        <F label="Date accord">
-          <input type="date" name="date_accord" className="input" defaultValue={c.date_accord ?? ''} />
-        </F>
-        <F label="Montant versé (€)">
-          <input type="number" step="0.01" name="montant_recupere" className="input" defaultValue={c.montant_recupere || ''} />
-        </F>
-        <F label="Date versement">
-          <input type="date" name="date_versement" className="input" defaultValue={c.date_versement ?? ''} />
-        </F>
-        <div className="col-span-2 text-xs text-aura-700/80">
-          Reste à charge PA : <b>{eur((c.montant_estime || 0) - (c.montant_recupere || 0))}</b> (préjudice − versé, recalculé après enregistrement)
-        </div>
-
-        <Section title="Prochaine action" />
-        <F label="Prochaine action">
-          <input name="prochaine_action" className="input" defaultValue={c.prochaine_action ?? ''} placeholder="ex. Relancer CF, envoyer LRAR…" />
-        </F>
-        <F label="Échéance">
-          <input type="date" name="action_echeance" className="input" defaultValue={c.action_echeance ?? ''} />
-        </F>
-        <F label="Notes" full>
-          <textarea name="notes" className="input" rows={2} defaultValue={c.notes ?? ''} />
-        </F>
-
-        <div className="col-span-2 flex justify-end gap-2 pt-1">
-          <button type="submit" className="btn-primary">{submitLabel}</button>
-        </div>
-      </form>
-    )
-  }
 
   return (
     <div className="space-y-5">
@@ -523,7 +562,9 @@ export default function ClaimPage() {
           )}
         </div>
 
-        {filtered.length === 0 ? (
+        {loading ? (
+          <Skeleton lines={5} />
+        ) : filtered.length === 0 ? (
           <EmptyState>Aucun dossier. Déclarez le premier sinistre avec « + Nouveau dossier ».</EmptyState>
         ) : (
           <div className="overflow-x-auto">
@@ -576,7 +617,7 @@ export default function ClaimPage() {
 
       {showNew && (
         <Modal wide title={`Nouveau dossier — ${nextRef()}`} onClose={() => setShowNew(false)}>
-          <ClaimForm c={{ assureur: 'Coste Fermon' }} onSubmit={createClaim} submitLabel="Créer le dossier" />
+          <ClaimForm c={{ assureur: 'Coste Fermon' }} onSubmit={createClaim} submitLabel="Créer le dossier" profiles={profiles} defaultAssignee={profile?.id ?? ''} />
         </Modal>
       )}
 
@@ -628,7 +669,7 @@ export default function ClaimPage() {
               )}
             </div>
 
-            <ClaimForm c={detail} onSubmit={saveDetail} submitLabel="Enregistrer les modifications" />
+            <ClaimForm c={detail} onSubmit={saveDetail} submitLabel="Enregistrer les modifications" profiles={profiles} defaultAssignee={profile?.id ?? ''} />
 
             <div>
               <h4 className="text-xs font-bold uppercase tracking-wide text-aura-700/70 mb-2">Historique</h4>

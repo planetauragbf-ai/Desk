@@ -8,3 +8,5 @@ export interface DashState {
 
 export function loadDash(): Promise<DashState | null>
 export function saveDash(value: DashState): void
+export function surConflitDash(fn: (() => void) | null): () => void
+export function rechargerDash(): Promise<DashState | null>

@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { signalerErreur } from '../lib/erreurs'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { can, visibleObjectives } from '../lib/permissions'
@@ -35,23 +36,27 @@ export default function NotesPage() {
   }, [notes, objectives, search])
 
   async function saveNote(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const now = new Date().toISOString()
-    const payload = {
-      title: String(fd.get('title')),
-      content: String(fd.get('content') ?? ''),
-      objective_id: String(fd.get('objective_id')) || null,
-      updated_at: now,
+    try {
+      e.preventDefault()
+      const fd = new FormData(e.currentTarget)
+      const now = new Date().toISOString()
+      const payload = {
+        title: String(fd.get('title')),
+        content: String(fd.get('content') ?? ''),
+        objective_id: String(fd.get('objective_id')) || null,
+        updated_at: now,
+      }
+      if (editing) {
+        await update('notes', editing.id, payload)
+        setEditing(null)
+      } else {
+        await insert('notes', { ...payload, author_id: profile?.id ?? null, shared: true, created_at: now } as Partial<Note>)
+        setParams({})
+      }
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Enregistrement de la note')
     }
-    if (editing) {
-      await update('notes', editing.id, payload)
-      setEditing(null)
-    } else {
-      await insert('notes', { ...payload, author_id: profile?.id ?? null, shared: true, created_at: now } as Partial<Note>)
-      setParams({})
-    }
-    refresh()
   }
 
   const objectiveTitle = (id: string | null) => objectives.find((o) => o.id === id)?.title

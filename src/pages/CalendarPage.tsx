@@ -1,11 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { signalerErreur } from '../lib/erreurs'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { insert, remove, update } from '../lib/data'
 import { notify } from '../lib/notify'
 import { formatDate } from '../lib/format'
 import type { Leave, LeaveStatus, LeaveType, TimeEntry } from '../lib/types'
-import { Card, EmptyState, Modal } from '../components/ui'
+import { Card, EmptyState, Modal, Skeleton } from '../components/ui'
 
 // Types alignés sur le planning salariés (P/C/M/E/FORM/TT/RC…)
 const TYPES: Record<LeaveType, { code: string; label: string; color: string }> = {
@@ -84,7 +85,7 @@ export default function CalendarPage() {
   const [editCell, setEditCell] = useState<{ profileId: string; date: string } | null>(null)
   const [showTime, setShowTime] = useState(false)
 
-  const { rows: leaves, refresh } = useTable('leaves', undefined, { column: 'created_at', ascending: false })
+  const { rows: leaves, refresh, loading } = useTable('leaves', undefined, { column: 'created_at', ascending: false })
   const { rows: profiles } = useTable('profiles', undefined, { column: 'full_name', ascending: true })
   const { rows: timeEntries, refresh: refreshTime } = useTable('time_entries', undefined, { column: 'date', ascending: false })
 
@@ -147,96 +148,116 @@ export default function CalendarPage() {
 
   /** Retire un jour d'une absence existante (suppression, troncature ou découpe). */
   async function removeDayFromLeave(l: Leave, iso: string) {
-    if (l.start_date === l.end_date) {
-      await remove('leaves', l.id)
-    } else if (iso === l.start_date) {
-      await update('leaves', l.id, { start_date: shiftDay(iso, 1) })
-    } else if (iso === l.end_date) {
-      await update('leaves', l.id, { end_date: shiftDay(iso, -1) })
-    } else {
-      await update('leaves', l.id, { end_date: shiftDay(iso, -1) })
-      await insert('leaves', {
-        profile_id: l.profile_id,
-        type: l.type,
-        start_date: shiftDay(iso, 1),
-        end_date: l.end_date,
-        reason: l.reason,
-        status: l.status,
-        admin_by: l.admin_by,
-        admin_at: l.admin_at,
-        compta_by: l.compta_by,
-        compta_at: l.compta_at,
-      })
+    try {
+      if (l.start_date === l.end_date) {
+        await remove('leaves', l.id)
+      } else if (iso === l.start_date) {
+        await update('leaves', l.id, { start_date: shiftDay(iso, 1) })
+      } else if (iso === l.end_date) {
+        await update('leaves', l.id, { end_date: shiftDay(iso, -1) })
+      } else {
+        await update('leaves', l.id, { end_date: shiftDay(iso, -1) })
+        await insert('leaves', {
+          profile_id: l.profile_id,
+          type: l.type,
+          start_date: shiftDay(iso, 1),
+          end_date: l.end_date,
+          reason: l.reason,
+          status: l.status,
+          admin_by: l.admin_by,
+          admin_at: l.admin_at,
+          compta_by: l.compta_by,
+          compta_at: l.compta_at,
+        })
+      }
+    } catch (err) {
+      signalerErreur(err, 'Modification du planning')
     }
   }
 
   /** Admin/compta : fixe la case (présence ou code d'absence) directement. */
   async function setCell(profileId: string, iso: string, type: LeaveType | 'presence') {
-    const existing = leaves.filter(
-      (l) => l.profile_id === profileId && l.status !== 'refusee' && l.start_date <= iso && l.end_date >= iso,
-    )
-    for (const l of existing) await removeDayFromLeave(l, iso)
-    if (type !== 'presence') {
-      const now = new Date().toISOString()
-      await insert('leaves', {
-        profile_id: profileId,
-        type,
-        start_date: iso,
-        end_date: iso,
-        reason: 'Saisie planning',
-        status: 'validee',
-        admin_by: profile?.id ?? null,
-        admin_at: now,
-        compta_by: profile?.id ?? null,
-        compta_at: now,
-      })
+    try {
+      const existing = leaves.filter(
+        (l) => l.profile_id === profileId && l.status !== 'refusee' && l.start_date <= iso && l.end_date >= iso,
+      )
+      for (const l of existing) await removeDayFromLeave(l, iso)
+      if (type !== 'presence') {
+        const now = new Date().toISOString()
+        await insert('leaves', {
+          profile_id: profileId,
+          type,
+          start_date: iso,
+          end_date: iso,
+          reason: 'Saisie planning',
+          status: 'validee',
+          admin_by: profile?.id ?? null,
+          admin_at: now,
+          compta_by: profile?.id ?? null,
+          compta_at: now,
+        })
+      }
+      setEditCell(null)
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Modification du planning')
     }
-    setEditCell(null)
-    refresh()
   }
 
   async function requestLeave(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const forId = isAdmin ? String(fd.get('profile_id')) || profile!.id : profile!.id
-    const created = await insert('leaves', {
-      profile_id: forId,
-      type: String(fd.get('type')) as LeaveType,
-      start_date: String(fd.get('start_date')),
-      end_date: String(fd.get('end_date') || fd.get('start_date')),
-      reason: String(fd.get('reason') ?? ''),
-      status: 'en_attente',
-    })
-    // Prévenir les administrateurs et le service compta (l'un OU l'autre valide).
-    const who = profiles.find((p) => p.id === forId)?.full_name ?? 'Un salarié'
-    await Promise.all(
-      profiles
-        .filter((p) => (p.role === 'admin' || p.is_compta) && p.id !== profile?.id)
-        .map((p) => notify(p.id, `📅 ${who} demande : ${TYPES[created.type].label} du ${formatDate(created.start_date)} au ${formatDate(created.end_date)}`, '/calendrier')),
-    )
-    setShowNew(false)
-    refresh()
+    try {
+      e.preventDefault()
+      const fd = new FormData(e.currentTarget)
+      const forId = isAdmin ? String(fd.get('profile_id')) || profile!.id : profile!.id
+      const created = await insert('leaves', {
+        profile_id: forId,
+        type: String(fd.get('type')) as LeaveType,
+        start_date: String(fd.get('start_date')),
+        end_date: String(fd.get('end_date') || fd.get('start_date')),
+        reason: String(fd.get('reason') ?? ''),
+        status: 'en_attente',
+      })
+      // Prévenir les administrateurs et le service compta (l'un OU l'autre valide).
+      const who = profiles.find((p) => p.id === forId)?.full_name ?? 'Un salarié'
+      await Promise.all(
+        profiles
+          .filter((p) => (p.role === 'admin' || p.is_compta) && p.id !== profile?.id)
+          .map((p) => notify(p.id, `📅 ${who} demande : ${TYPES[created.type].label} du ${formatDate(created.start_date)} au ${formatDate(created.end_date)}`, '/calendrier')),
+      )
+      setShowNew(false)
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Demande de congé')
+    }
   }
 
   /** Validation unique : par un admin OU par le service compta. */
   async function approve(l: Leave) {
-    await update('leaves', l.id, {
-      status: 'validee',
-      admin_by: profile!.id,
-      admin_at: new Date().toISOString(),
-      compta_by: profile!.id,
-      compta_at: new Date().toISOString(),
-    })
-    await notify(l.profile_id, `✅ Votre demande (${TYPES[l.type].label} du ${formatDate(l.start_date)}) est validée`, '/calendrier')
-    refresh()
+    try {
+      await update('leaves', l.id, {
+        status: 'validee',
+        admin_by: profile!.id,
+        admin_at: new Date().toISOString(),
+        compta_by: profile!.id,
+        compta_at: new Date().toISOString(),
+      })
+      await notify(l.profile_id, `✅ Votre demande (${TYPES[l.type].label} du ${formatDate(l.start_date)}) est validée`, '/calendrier')
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Validation')
+    }
   }
 
   async function refuse(l: Leave) {
-    const reason = prompt('Motif du refus (transmis au salarié) :')
-    if (reason === null) return
-    await update('leaves', l.id, { status: 'refusee', refusal_reason: reason })
-    await notify(l.profile_id, `❌ Votre demande (${TYPES[l.type].label} du ${formatDate(l.start_date)}) a été refusée${reason ? ` : ${reason}` : ''}`, '/calendrier')
-    refresh()
+    try {
+      const reason = prompt('Motif du refus (transmis au salarié) :')
+      if (reason === null) return
+      await update('leaves', l.id, { status: 'refusee', refusal_reason: reason })
+      await notify(l.profile_id, `❌ Votre demande (${TYPES[l.type].label} du ${formatDate(l.start_date)}) a été refusée${reason ? ` : ${reason}` : ''}`, '/calendrier')
+      refresh()
+    } catch (err) {
+      signalerErreur(err, 'Refus')
+    }
   }
 
   const personName = (id: string | null) => profiles.find((p) => p.id === id)?.full_name ?? '—'
@@ -249,23 +270,28 @@ export default function CalendarPage() {
     monthEntries.filter((e) => e.profile_id === profileId && e.kind === kind).reduce((s, e) => s + e.minutes, 0)
 
   async function addTimeEntry(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const minutes = Number(fd.get('hours') || 0) * 60 + Number(fd.get('minutes') || 0)
-    if (minutes <= 0) return alert('Indiquez une durée.')
-    await insert('time_entries', {
-      profile_id: canEditPlanning ? String(fd.get('profile_id')) || profile!.id : profile!.id,
-      kind: String(fd.get('kind')) as TimeEntry['kind'],
-      date: String(fd.get('date')),
-      minutes,
-      note: String(fd.get('note') ?? ''),
-      created_by: profile?.id ?? null,
-    })
-    setShowTime(false)
-    refreshTime()
+    try {
+      e.preventDefault()
+      const fd = new FormData(e.currentTarget)
+      const minutes = Number(fd.get('hours') || 0) * 60 + Number(fd.get('minutes') || 0)
+      if (minutes <= 0) return alert('Indiquez une durée.')
+      await insert('time_entries', {
+        profile_id: canEditPlanning ? String(fd.get('profile_id')) || profile!.id : profile!.id,
+        kind: String(fd.get('kind')) as TimeEntry['kind'],
+        date: String(fd.get('date')),
+        minutes,
+        note: String(fd.get('note') ?? ''),
+        created_by: profile?.id ?? null,
+      })
+      setShowTime(false)
+      refreshTime()
+    } catch (err) {
+      signalerErreur(err, 'Enregistrement des heures')
+    }
   }
 
   function ValidationList({ items }: { items: Leave[] }) {
+    if (loading) return <Skeleton lines={2} />
     if (items.length === 0) return <EmptyState>Aucune demande en attente.</EmptyState>
     return (
       <ul className="space-y-2.5">

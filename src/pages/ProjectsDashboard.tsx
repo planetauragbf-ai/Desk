@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { signalerErreur } from '../lib/erreurs'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { computeStats, isCritical } from '../lib/compute'
@@ -64,33 +65,45 @@ export default function ProjectsDashboard() {
   const unread = notifications.filter((n) => !n.read)
 
   async function markAllRead() {
-    await Promise.all(unread.map((n) => update('notifications', n.id, { read: true })))
-    refreshNotifs()
+    try {
+      await Promise.all(unread.map((n) => update('notifications', n.id, { read: true })))
+      refreshNotifs()
+    } catch (err) {
+      signalerErreur(err, 'Notifications')
+    }
   }
 
   // Tâches soumises à MA validation.
   const toApprove = tasks.filter((t) => t.validator_id === profile?.id && t.status === 'validation')
 
   async function approveTask(t: (typeof tasks)[number]) {
-    await update('tasks', t.id, { status: 'termine', completed_at: new Date().toISOString() })
-    if (t.assignee_id && t.assignee_id !== profile?.id) {
-      await notify(t.assignee_id, `Votre tâche « ${t.title} » a été validée ✔`, t.objective_id ? `/objectifs/${t.objective_id}?onglet=taches` : undefined)
+    try {
+      await update('tasks', t.id, { status: 'termine', completed_at: new Date().toISOString() })
+      if (t.assignee_id && t.assignee_id !== profile?.id) {
+        await notify(t.assignee_id, `Votre tâche « ${t.title} » a été validée ✔`, t.objective_id ? `/objectifs/${t.objective_id}?onglet=taches` : undefined)
+      }
+      refreshTasks()
+    } catch (err) {
+      signalerErreur(err, 'Validation')
     }
-    refreshTasks()
   }
 
   async function rejectTask(t: (typeof tasks)[number]) {
-    const reason = prompt(`Motif du refus de « ${t.title} » (transmis à l'exécutant) :`)
-    if (reason === null) return
-    await update('tasks', t.id, { status: 'en_cours', completed_at: null })
-    if (t.assignee_id && t.assignee_id !== profile?.id) {
-      await notify(
-        t.assignee_id,
-        `Tâche « ${t.title} » refusée par ${profile?.full_name ?? '—'}${reason ? ` : ${reason}` : ''}`,
-        t.objective_id ? `/objectifs/${t.objective_id}?onglet=taches` : undefined,
-      )
+    try {
+      const reason = prompt(`Motif du refus de « ${t.title} » (transmis à l'exécutant) :`)
+      if (reason === null) return
+      await update('tasks', t.id, { status: 'en_cours', completed_at: null })
+      if (t.assignee_id && t.assignee_id !== profile?.id) {
+        await notify(
+          t.assignee_id,
+          `Tâche « ${t.title} » refusée par ${profile?.full_name ?? '—'}${reason ? ` : ${reason}` : ''}`,
+          t.objective_id ? `/objectifs/${t.objective_id}?onglet=taches` : undefined,
+        )
+      }
+      refreshTasks()
+    } catch (err) {
+      signalerErreur(err, 'Renvoi de la tâche')
     }
-    refreshTasks()
   }
 
   return (

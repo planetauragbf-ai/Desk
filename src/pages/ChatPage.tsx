@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent 
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
+import { useUnread } from '../hooks/useUnread'
+import { markRead } from '../lib/chat'
 import { insert, list, remove, update } from '../lib/data'
 import { essayer, messageErreur } from '../lib/erreurs'
 import { notify } from '../lib/notify'
@@ -10,6 +12,7 @@ import { supabase } from '../lib/supabase'
 import { formatDateTime, profileName } from '../lib/format'
 import type { Channel, Message } from '../lib/types'
 import { Avatar, Card, EmptyState, Modal } from '../components/ui'
+import EmojiPicker from '../components/EmojiPicker'
 
 /** Téléverse une pièce jointe (bucket "chat") ; data-URL en mode démo. */
 async function uploadAttachment(file: File): Promise<{ url: string; type: Message['file_type'] }> {
@@ -31,6 +34,16 @@ async function uploadAttachment(file: File): Promise<{ url: string; type: Messag
   return { url, type }
 }
 
+/** Nombre de messages non lus d'une conversation. */
+function UnreadBadge({ n }: { n?: number }) {
+  if (!n) return null
+  return (
+    <span className="shrink-0 rounded-full bg-coral-600 px-2 py-0.5 text-[11px] font-bold text-white leading-none">
+      {n > 99 ? '99+' : n}
+    </span>
+  )
+}
+
 export default function ChatPage() {
   const { profile } = useAuth()
   const [params, setParams] = useSearchParams()
@@ -40,6 +53,19 @@ export default function ChatPage() {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
+  const draftRef = useRef<HTMLInputElement>(null)
+
+  /** Insère un émoji à l'endroit du curseur, pas seulement à la fin. */
+  function insertEmoji(emoji: string) {
+    const el = draftRef.current
+    const pos = el?.selectionStart ?? draft.length
+    setDraft(draft.slice(0, pos) + emoji + draft.slice(el?.selectionEnd ?? pos))
+    requestAnimationFrame(() => {
+      el?.focus()
+      const apres = pos + emoji.length
+      el?.setSelectionRange(apres, apres)
+    })
+  }
 
   const { rows: allChannels, refresh: refreshChannels } = useTable('channels', undefined, { column: 'created_at', ascending: true })
   const { rows: members, refresh: refreshMembers } = useTable('channel_members')
@@ -99,9 +125,16 @@ export default function ChatPage() {
     if (el) el.scrollTop = el.scrollHeight
   }, [messages.length, channelId])
 
-  // Ouvrir une conversation marque ses notifications comme lues.
+  // Pastilles « non lus » par conversation. La clé inclut le canal ouvert
+  // et le nombre de messages affichés : le compteur retombe à zéro dès que
+  // la conversation est lue, et remonte dès qu'un collègue répond.
+  const unread = useUnread(profile?.id, `${channelId ?? ''}-${messages.length}`)
+
+  // Ouvrir une conversation la marque comme lue (côté base) et solde ses
+  // notifications.
   useEffect(() => {
     if (!channelId || !profile) return
+    markRead(channelId)
     list('notifications', { user_id: profile.id })
       .then((rows) =>
         Promise.all(
@@ -404,11 +437,12 @@ export default function ChatPage() {
                 <button
                   key={c.id}
                   onClick={() => setParams({ canal: c.id })}
-                  className={`w-full text-left rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     c.id === channelId ? 'bg-aura-800 text-white' : 'text-aura-800 hover:bg-aura-50'
                   }`}
                 >
-                  {c.private ? '🔒' : '#'} {c.name}
+                  <span className="truncate text-left flex-1">{c.private ? '🔒' : '#'} {c.name}</span>
+                  <UnreadBadge n={unread[c.id]?.unread} />
                 </button>
               ))}
             </div>
@@ -426,11 +460,12 @@ export default function ChatPage() {
                 <button
                   key={c.id}
                   onClick={() => setParams({ canal: c.id })}
-                  className={`w-full text-left rounded-lg px-3 py-2 text-sm font-medium transition-colors truncate ${
+                  className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     c.id === channelId ? 'bg-aura-800 text-white' : 'text-aura-800 hover:bg-aura-50'
                   }`}
                 >
-                  👥 {dmName(c)}
+                  <span className="truncate text-left flex-1">👥 {dmName(c)}</span>
+                  <UnreadBadge n={unread[c.id]?.unread} />
                 </button>
               ))}
             </div>
@@ -485,14 +520,16 @@ export default function ChatPage() {
                 ))}
               </div>
 
-              <form onSubmit={sendMessage} className="mt-3 flex gap-2 border-t border-aura-100 pt-3">
+              <form onSubmit={sendMessage} className="mt-3 flex flex-wrap gap-2 border-t border-aura-100 pt-3">
                 <label className={`btn-secondary !px-3 cursor-pointer ${sending ? 'opacity-50 pointer-events-none' : ''}`} title="Envoyer une photo ou un fichier (PDF…)">
                   {sending ? '⏳' : '📎'}
                   <input type="file" className="hidden" onChange={sendFile} disabled={sending} />
                 </label>
                 <button type="button" className="btn-secondary !px-3" title="Créer un questionnaire" onClick={() => setShowPoll(true)}>📊</button>
+                <EmojiPicker onPick={insertEmoji} />
                 <input
-                  className="input flex-1"
+                  ref={draftRef}
+                  className="input flex-1 min-w-[8rem]"
                   placeholder={channel.dm ? `Écrire à ${dmName(channel)}…` : `Écrire dans ${channel.private ? '🔒' : '#'}${channel.name}…`}
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}

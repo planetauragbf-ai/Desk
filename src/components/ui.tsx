@@ -114,6 +114,28 @@ export function EmptyState({ children }: { children: ReactNode }) {
   return <p className="text-sm text-aura-700/70 py-6 text-center">{children}</p>
 }
 
+/**
+ * Lignes grises pendant le chargement.
+ *
+ * Sans cela, une liste en cours de chargement était indiscernable d'une
+ * liste vide : « Aucun document » s'affichait une fraction de seconde
+ * avant que les données n'arrivent, et sur une connexion lente on
+ * concluait que tout avait disparu.
+ */
+export function Skeleton({ lines = 3 }: { lines?: number }) {
+  return (
+    <div className="py-3 space-y-2" aria-busy="true" aria-label="Chargement…">
+      {Array.from({ length: lines }, (_, i) => (
+        <div
+          key={i}
+          className="h-4 rounded bg-aura-100 animate-pulse"
+          style={{ width: `${100 - i * 12}%` }}
+        />
+      ))}
+    </div>
+  )
+}
+
 export function Modal({ title, onClose, children, wide = false }: {
   title: string
   onClose: () => void

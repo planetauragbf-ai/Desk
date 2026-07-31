@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { signalerErreur } from '../lib/erreurs'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { computeStats } from '../lib/compute'
@@ -40,27 +41,31 @@ export default function Objectives() {
   }, [objectives, tasks, indicators])
 
   async function createObjective(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (!canCreateObjectives(profile)) return
-    const fd = new FormData(e.currentTarget)
-    const created = await insert('objectives', {
-      title: String(fd.get('title')),
-      expected_result: String(fd.get('expected_result') ?? ''),
-      parent_id: String(fd.get('parent_id')) || null,
-      instance_id: String(fd.get('instance_id')) || null,
-      priority: String(fd.get('priority')) as Priority,
-      status: 'non_initie',
-      start_date: String(fd.get('start_date')) || null,
-      due_date: String(fd.get('due_date')) || null,
-      owner_id: String(fd.get('owner_id')) || null,
-      created_by: profile?.id ?? null,
-    } as Partial<Objective>)
-    const ownerId = String(fd.get('owner_id')) || null
-    if (ownerId && ownerId !== profile?.id) {
-      await notify(ownerId, `Vous êtes référent du nouvel objectif : « ${created.title} »`, `/objectifs/${created.id}`)
+    try {
+      e.preventDefault()
+      if (!canCreateObjectives(profile)) return
+      const fd = new FormData(e.currentTarget)
+      const created = await insert('objectives', {
+        title: String(fd.get('title')),
+        expected_result: String(fd.get('expected_result') ?? ''),
+        parent_id: String(fd.get('parent_id')) || null,
+        instance_id: String(fd.get('instance_id')) || null,
+        priority: String(fd.get('priority')) as Priority,
+        status: 'non_initie',
+        start_date: String(fd.get('start_date')) || null,
+        due_date: String(fd.get('due_date')) || null,
+        owner_id: String(fd.get('owner_id')) || null,
+        created_by: profile?.id ?? null,
+      } as Partial<Objective>)
+      const ownerId = String(fd.get('owner_id')) || null
+      if (ownerId && ownerId !== profile?.id) {
+        await notify(ownerId, `Vous êtes référent du nouvel objectif : « ${created.title} »`, `/objectifs/${created.id}`)
+      }
+      setParams({})
+      refresh()
+    } catch (err) {
+      signalerErreur(err, "Création de l'objectif")
     }
-    setParams({})
-    refresh()
   }
 
   return (

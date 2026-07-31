@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { supabase } from '../lib/supabase'
 import { formatDateTime } from '../lib/format'
-import { Card, EmptyState } from '../components/ui'
+import { Card, EmptyState, Skeleton } from '../components/ui'
 
 const APP_LABELS: Record<string, string> = {
   projects: "Planet'Projects",
@@ -47,7 +47,7 @@ export default function JournalPage() {
   const [search, setSearch] = useState('')
   const [stockEntries, setStockEntries] = useState<Entry[]>([])
 
-  const { rows: auditRows } = useTable('audit_log', undefined, { column: 'created_at', ascending: false })
+  const { rows: auditRows, loading } = useTable('audit_log', undefined, { column: 'created_at', ascending: false })
 
   // Le module stock tient son journal dans son état applicatif (table
   // app_state, hors couche typée) : on le fusionne ici pour une vue unique.
@@ -127,7 +127,9 @@ export default function JournalPage() {
           />
         </div>
 
-        {entries.length === 0 ? (
+        {loading ? (
+          <Skeleton lines={5} />
+        ) : entries.length === 0 ? (
           <EmptyState>
             Aucune activité enregistrée{appFilter ? ` pour ${APP_LABELS[appFilter]}` : ''}. Les actions
             apparaissent ici au fur et à mesure de l'utilisation.
