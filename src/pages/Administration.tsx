@@ -29,6 +29,8 @@ export default function Administration() {
 
       <BrandingCard />
 
+      <IntegrationsCard />
+
       <Card
         title="Comptes salariés"
         action={<button className="btn-primary" onClick={() => setCreating(true)}>+ Créer un compte salarié</button>}
@@ -364,6 +366,55 @@ function BrandingCard() {
       </div>
       {message && <p className="text-sm text-emerald-700 mt-3">{message}</p>}
       {error && <p className="text-sm text-coral-600 mt-3">{error}</p>}
+    </Card>
+  )
+}
+
+/** Clés d'intégration externes (ex. Ship24 pour Planet'Dash). */
+function IntegrationsCard() {
+  const { rows: settings, refresh } = useTable('app_settings')
+  const [value, setValue] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+
+  const row = settings.find((s) => s.key === 'ship24_api_key')
+  const current = value ?? row?.value ?? ''
+
+  async function save() {
+    setBusy(true)
+    setMessage(null)
+    try {
+      const v = current.trim()
+      if (row) await update('app_settings', row.id, { value: v, updated_at: new Date().toISOString() })
+      else await insert('app_settings', { key: 'ship24_api_key', value: v, updated_at: new Date().toISOString() })
+      setMessage(v ? 'Clé enregistrée. Le suivi automatique Ship24 est actif.' : 'Clé effacée : le suivi reste manuel.')
+      refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card title="Intégrations — Suivi des expéditions (Ship24)">
+      <p className="text-sm text-aura-700/80 mb-3">
+        Clé API utilisée par Planet'Dash pour récupérer automatiquement les statuts de livraison.
+        Tant qu'elle est vide, les statuts restent saisis manuellement. La clé n'est jamais dans le
+        code : elle est stockée ici et modifiable à tout moment.
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-64">
+          <label className="label">Clé API Ship24</label>
+          <input
+            type="password"
+            className="input font-mono"
+            placeholder="Collez la clé quand vous l'aurez…"
+            value={current}
+            onChange={(e) => setValue(e.target.value)}
+          />
+        </div>
+        <button className="btn-primary" onClick={save} disabled={busy}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
+      </div>
+      {message && <p className="text-sm text-emerald-700 mt-2">{message}</p>}
     </Card>
   )
 }

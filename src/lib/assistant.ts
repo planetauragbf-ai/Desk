@@ -5,6 +5,7 @@
 // sans dépendre d'un service externe.
 import type {
   Channel,
+  Claim,
   Decision,
   DocumentMeta,
   Leave,
@@ -31,10 +32,25 @@ export interface AssistantData {
   channels: Channel[]
   messages: Message[]
   leaves: Leave[]
+  claims: Claim[]
+  /** Expéditions Planet'Dash (état applicatif, hors couche typée) */
+  shippings: DashShipping[]
+}
+
+/** Expédition telle que stockée par Planet'Dash */
+export interface DashShipping {
+  id: string
+  dashboard?: string
+  status?: string
+  transporteur?: string
+  dateLivSouhaitee?: string
+  tracking?: { number?: string }
+  exp?: { nom?: string }
+  dest?: { nom?: string; prenom?: string; ville?: string; pays?: string }
 }
 
 export interface AssistantResult {
-  kind: 'objectif' | 'tache' | 'note' | 'document' | 'decision' | 'process' | 'lien' | 'personne' | 'message' | 'conge'
+  kind: 'objectif' | 'tache' | 'note' | 'document' | 'decision' | 'process' | 'lien' | 'personne' | 'message' | 'conge' | 'expedition' | 'sinistre'
   title: string
   subtitle?: string
   /** Route interne (commence par « / ») ou URL externe (liens outils) */
@@ -57,6 +73,8 @@ export const SHORTCUTS = [
   'Nos process',
   'Objectifs en cours',
   'Qui est absent ?',
+  'Expéditions en incident',
+  'Dossiers sinistres ouverts',
 ]
 
 function normalize(s: string): string {
@@ -204,6 +222,38 @@ function buildIndex(d: AssistantData): Doc[] {
       date: l.created_at,
     })
   }
+  const DASH_STATUS: Record<string, string> = {
+    non_specifie: 'Non spécifié', att_info: 'Attente info', differe: 'Différé', pickup: 'Pick-up',
+    transit: 'En transit', tentative: 'Tentative', point_relais: 'Point relais', exception: 'Exception',
+    livre: 'Livré', sinistre: 'Sinistre', annule: 'Annulé',
+  }
+  for (const sh of d.shippings) {
+    const dest = [sh.dest?.prenom, sh.dest?.nom].filter(Boolean).join(' ')
+    docs.push({
+      result: {
+        kind: 'expedition',
+        title: `Expédition ${sh.id}${dest ? ` — ${dest}` : ''}`,
+        subtitle: `${DASH_STATUS[sh.status ?? ''] ?? sh.status ?? '—'}${sh.transporteur ? ` · ${sh.transporteur}` : ''}${sh.dest?.pays ? ` · ${sh.dest.pays}` : ''}${sh.tracking?.number ? ` · ${sh.tracking.number}` : ''}`,
+        to: '/dash',
+      },
+      haystackTitle: `${sh.id} ${dest}`,
+      haystackBody: `${sh.tracking?.number ?? ''} ${sh.transporteur ?? ''} ${sh.exp?.nom ?? ''} ${sh.dest?.ville ?? ''} ${sh.dest?.pays ?? ''} expedition colis`,
+      date: sh.dateLivSouhaitee ?? '',
+    })
+  }
+  for (const c of d.claims) {
+    docs.push({
+      result: {
+        kind: 'sinistre',
+        title: `${c.ref} — ${c.title}`,
+        subtitle: `${c.status} · ${c.carrier || '—'}${c.adherent ? ` · ${c.adherent}` : ''}`,
+        to: '/claim',
+      },
+      haystackTitle: `${c.ref} ${c.title}`,
+      haystackBody: `${c.description} ${c.client_nom ?? ''} ${c.adherent} ${c.pays} ${c.shipping_ref} ${c.tracking_number} sinistre litige`,
+      date: c.created_at,
+    })
+  }
   return docs
 }
 
@@ -293,6 +343,35 @@ export function answer(question: string, d: AssistantData): AssistantAnswer {
         ? `${soon.length} ${plural(soon.length, 'échéance')} dans les 14 prochains jours :`
         : 'Aucune échéance dans les 14 prochains jours.',
       results: soon.slice(0, 10).map((t) => taskResult(d, t)),
+    }
+  }
+
+  // ----- Expéditions / colis
+  if (q.includes('colis') || q.includes('expedition') || q.includes('livraison') || q.includes('tracking') || q.includes('transporteur')) {
+    const results = search(d, question, ['expedition'])
+    if (results.length) return { text: 'Expéditions correspondantes :', results }
+    const incidents = d.shippings.filter((s) => ['exception', 'sinistre', 'tentative'].includes(s.status ?? ''))
+    return {
+      text: incidents.length
+        ? `${incidents.length} ${plural(incidents.length, 'expédition')} en incident :`
+        : "Aucune expédition en incident. Ouvrez Planet'Dash pour le suivi complet.",
+      results: incidents.slice(0, 8).map((s) => ({
+        kind: 'expedition' as const,
+        title: `Expédition ${s.id}`,
+        subtitle: `${s.status} · ${s.transporteur ?? '—'}`,
+        to: '/dash',
+      })),
+    }
+  }
+
+  // ----- Sinistres / litiges
+  if (q.includes('sinistre') || q.includes('litige') || q.includes('casse') || q.includes('reclamation')) {
+    const results = search(d, question, ['sinistre'])
+    if (results.length) return { text: 'Dossiers correspondants :', results }
+    const opens = d.claims.filter((c) => !['clos', 'accepte', 'refuse'].includes(c.status))
+    return {
+      text: opens.length ? `${opens.length} ${plural(opens.length, 'dossier')} ouvert(s) :` : 'Aucun dossier sinistre ouvert.',
+      results: opens.slice(0, 8).map((c) => ({ kind: 'sinistre' as const, title: `${c.ref} — ${c.title}`, subtitle: c.status, to: '/claim' })),
     }
   }
 
@@ -406,4 +485,6 @@ export const KIND_LABELS: Record<AssistantResult['kind'], string> = {
   personne: 'Équipe',
   message: 'Message',
   conge: 'Congé / absence',
+  expedition: 'Expédition',
+  sinistre: 'Sinistre',
 }

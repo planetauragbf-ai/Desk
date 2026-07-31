@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
-import { answer, KIND_LABELS, SHORTCUTS, type AssistantData, type AssistantResult } from '../lib/assistant'
+import { answer, KIND_LABELS, SHORTCUTS, type AssistantData, type AssistantResult, type DashShipping } from '../lib/assistant'
+import { loadDash } from '../dash/storage'
 import { Card } from '../components/ui'
 
 interface Turn {
@@ -34,10 +35,16 @@ export default function AssistantPage() {
   const { rows: channels } = useTable('channels')
   const { rows: messages } = useTable('messages')
   const { rows: leaves } = useTable('leaves')
+  const { rows: claims } = useTable('claims')
+  // Expéditions Planet'Dash : stockées dans app_state (hors couche typée).
+  const [shippings, setShippings] = useState<DashShipping[]>([])
+  useEffect(() => {
+    loadDash().then((d) => setShippings(Array.isArray(d?.shippings) ? d.shippings : []))
+  }, [])
 
   const data: AssistantData = useMemo(
-    () => ({ profile, profiles, objectives, tasks, notes, documents, decisions, workflows, links, channels, messages, leaves }),
-    [profile, profiles, objectives, tasks, notes, documents, decisions, workflows, links, channels, messages, leaves],
+    () => ({ profile, profiles, objectives, tasks, notes, documents, decisions, workflows, links, channels, messages, leaves, claims, shippings }),
+    [profile, profiles, objectives, tasks, notes, documents, decisions, workflows, links, channels, messages, leaves, claims, shippings],
   )
 
   // Défilement du fil de conversation uniquement (jamais de la page entière).
