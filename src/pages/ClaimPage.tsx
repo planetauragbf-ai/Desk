@@ -1,9 +1,10 @@
-import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
 import { insert, remove, update } from '../lib/data'
 import { supabase } from '../lib/supabase'
 import { notify } from '../lib/notify'
+import { loadAdherents, mergeAdherentNames, type AdherentRef } from '../lib/adherents'
 import { formatDate, formatDateTime, profileName } from '../lib/format'
 import type { Claim, ClaimCategory, ClaimStatus, Priority } from '../lib/types'
 import { Card, EmptyState, Modal, StatTile } from '../components/ui'
@@ -93,7 +94,16 @@ export default function ClaimPage() {
   // Listes auto-apprenantes : une valeur saisie une fois devient proposée.
   const distinct = (get: (c: Claim) => string | undefined) =>
     [...new Set(claims.map(get).filter((v): v is string => !!v && v.trim() !== ''))].sort((a, b) => a.localeCompare(b, 'fr'))
-  const adherents = useMemo(() => distinct((c) => c.adherent), [claims])
+  // Référentiel adhérents : Planet'Stock (source unique) + valeurs déjà
+  // saisies dans les dossiers, pour ne rien perdre de l'historique.
+  const [referentiel, setReferentiel] = useState<AdherentRef[]>([])
+  useEffect(() => {
+    loadAdherents().then(setReferentiel)
+  }, [])
+  const adherents = useMemo(
+    () => mergeAdherentNames(referentiel, claims.map((c) => c.adherent)),
+    [referentiel, claims],
+  )
   const paysList = useMemo(() => distinct((c) => c.pays), [claims])
   const clientsList = useMemo(() => distinct((c) => c.client_nom), [claims])
 
