@@ -38,7 +38,7 @@ export default function Organisation() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-extrabold">Organigramme</h1>
         <button className="btn-primary" onClick={() => setShowNew(true)}>+ Ajouter une instance</button>
       </div>
@@ -48,7 +48,8 @@ export default function Organisation() {
           {instances.length === 0 ? (
             <EmptyState>Créez vos instances (direction, pôles, équipes) pour structurer l'organisation.</EmptyState>
           ) : (
-            <table className="w-full">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px]">
               <thead>
                 <tr>
                   <th className="table-head rounded-l-lg">Intitulé</th>
@@ -88,7 +89,8 @@ export default function Organisation() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
           )}
         </Card>
 

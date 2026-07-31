@@ -386,7 +386,7 @@ export default function ChatPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-extrabold">Chat interne</h1>
         {can(profile, 'chat_canaux') && (
           <button className="btn-primary" onClick={() => setShowNewChannel(true)}>+ Nouveau canal</button>

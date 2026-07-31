@@ -10,6 +10,15 @@ export default function Dashboard() {
   const { profile } = useAuth()
   const { logos } = useBranding()
 
+  // Raccourci vers l'application métier historique de Planet Aura, hors
+  // Planet'Desk : ouverte dans un nouvel onglet, visible par tous.
+  const APP_METIER = {
+    logo: logos.desk,
+    url: 'https://app.planet-aura.com/login.php',
+    title: 'Planet Aura',
+    desc: 'L’application métier : app.planet-aura.com',
+  }
+
   const apps: { logo: string; to: string; module: ModuleKey; title: string; desc: string; soon?: boolean }[] = [
     {
       logo: logos.projects,
@@ -72,34 +81,45 @@ export default function Dashboard() {
         <p className="text-sm text-aura-700/80 mt-1">Bienvenue sur Planet'Desk, le bureau numérique de Planet Aura.</p>
       </div>
 
-      {visibleApps.length > 0 && (
-        <section>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-aura-700/60 mb-3">Applications</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {visibleApps.map((a) => (
-              <Link
-                key={a.to}
-                to={a.to}
-                className="card flex items-center gap-4 hover:shadow-lg transition-shadow"
-              >
-                <img src={a.logo} alt={a.title} className="h-14 w-14 rounded-full border border-aura-100 bg-white object-contain" />
-                <div className="min-w-0">
-                  <div className="text-base font-extrabold text-aura-950 flex items-center gap-2">
-                    {a.title}
-                    {a.soon && (
-                      <span className="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-                        Bientôt
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-aura-700/80 mt-0.5">{a.desc}</div>
+      <section>
+        <h2 className="text-xs font-bold uppercase tracking-widest text-aura-700/60 mb-3">Applications</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <a
+            href={APP_METIER.url}
+            target="_blank"
+            rel="noreferrer"
+            className="card flex items-center gap-4 hover:shadow-lg transition-shadow"
+          >
+            <img
+              src={APP_METIER.logo}
+              alt={APP_METIER.title}
+              className="h-14 w-14 shrink-0 rounded-full border border-aura-100 bg-white object-contain"
+            />
+            <div className="min-w-0">
+              <div className="text-base font-extrabold text-aura-950">{APP_METIER.title}</div>
+              <div className="text-xs text-aura-700/80 mt-0.5">{APP_METIER.desc}</div>
+            </div>
+            <span className="ml-auto text-accent-500 text-xl" title="S'ouvre dans un nouvel onglet">↗</span>
+          </a>
+          {visibleApps.map((a) => (
+            <Link key={a.to} to={a.to} className="card flex items-center gap-4 hover:shadow-lg transition-shadow">
+              <img src={a.logo} alt={a.title} className="h-14 w-14 shrink-0 rounded-full border border-aura-100 bg-white object-contain" />
+              <div className="min-w-0">
+                <div className="text-base font-extrabold text-aura-950 flex items-center gap-2">
+                  {a.title}
+                  {a.soon && (
+                    <span className="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                      Bientôt
+                    </span>
+                  )}
                 </div>
-                <span className="ml-auto text-accent-500 text-xl">→</span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+                <div className="text-xs text-aura-700/80 mt-0.5">{a.desc}</div>
+              </div>
+              <span className="ml-auto text-accent-500 text-xl">→</span>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       {visibleSpaces.length > 0 && (
         <section>

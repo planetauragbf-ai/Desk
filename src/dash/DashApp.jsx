@@ -541,10 +541,11 @@ const handleSync = () => { alert("Le suivi automatique Ship24 n'est pas encore r
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <div style={{ position: "relative" }}>
+        {/* flexWrap : sur téléphone la barre d'outils dépassait de l'écran. */}
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ position: "relative", flex: "1 1 160px", minWidth: 0 }}>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher…"
-              style={{ padding: "6px 10px 6px 28px", borderRadius: 7, border: "1px solid var(--b1)", background: "var(--bg2)", color: "var(--t1)", fontSize: 12, width: 180, outline: "none", fontFamily: "var(--font)" }} />
+              style={{ padding: "6px 10px 6px 28px", borderRadius: 7, border: "1px solid var(--b1)", background: "var(--bg2)", color: "var(--t1)", fontSize: 12, width: "100%", maxWidth: 180, outline: "none", fontFamily: "var(--font)", boxSizing: "border-box" }} />
             <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: 11 }}>🔍</span>
           </div>
           <button onClick={() => setShowFilters(!showFilters)} style={{ ...btnSmS, background: showFilters ? "var(--accent-bg)" : "var(--bg2)", color: showFilters ? "var(--accent)" : "var(--t2)" }}>▽ Filtres</button>

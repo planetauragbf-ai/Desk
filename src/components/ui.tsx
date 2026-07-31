@@ -15,7 +15,10 @@ export function Card({ title, action, children, className = '' }: {
   className?: string
 }) {
   return (
-    <section className={`card ${className}`}>
+    // `min-w-0` : sans cela une carte placée dans une grille s'élargit au
+    // contenu (un tableau, par exemple) au lieu de le laisser défiler, et
+    // c'est toute la page qui débordait sur téléphone.
+    <section className={`card min-w-0 ${className}`}>
       {(title || action) && (
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-bold text-aura-900">{title}</h2>

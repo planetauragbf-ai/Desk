@@ -129,7 +129,7 @@ const itemClass = (active: boolean, mini: boolean) =>
     mini ? 'justify-center px-0' : ''
   } ${active ? 'bg-accent-500/10 text-accent-500' : 'text-aura-700 hover:bg-aura-50 hover:text-aura-900'}`
 
-function NavItems({ items, mini }: { items: NavItem[]; mini: boolean }) {
+function NavItems({ items, mini, onNavigate }: { items: NavItem[]; mini: boolean; onNavigate?: () => void }) {
   const { pathname, search } = useLocation()
   return (
     <>
@@ -142,7 +142,7 @@ function NavItems({ items, mini }: { items: NavItem[]; mini: boolean }) {
           const current = new URLSearchParams(search).get('onglet') ?? 'dashboard'
           const active = pathname === path && wanted === current
           return (
-            <Link key={item.to} to={item.to} title={item.label} className={itemClass(active, mini)}>
+            <Link key={item.to} to={item.to} title={item.label} onClick={onNavigate} className={itemClass(active, mini)}>
               <span className="text-base w-5 text-center shrink-0">{item.icon}</span>
               {!mini && item.label}
             </Link>
@@ -153,6 +153,7 @@ function NavItems({ items, mini }: { items: NavItem[]; mini: boolean }) {
             key={item.to}
             to={item.to}
             title={item.label}
+            onClick={onNavigate}
             className={({ isActive }) => itemClass(isActive, mini)}
           >
             <span className="text-base w-5 text-center shrink-0">{item.icon}</span>
@@ -165,7 +166,7 @@ function NavItems({ items, mini }: { items: NavItem[]; mini: boolean }) {
 }
 
 /** Sous-catégorie repliable à l'intérieur d'une section d'application. */
-function SubGroup({ label, items, storageKey }: { label: string; items: NavItem[]; storageKey: string }) {
+function SubGroup({ label, items, storageKey, onNavigate }: { label: string; items: NavItem[]; storageKey: string; onNavigate?: () => void }) {
   const [open, setOpen] = usePersistedBool(storageKey, true)
   return (
     <div className="pl-2">
@@ -179,17 +180,18 @@ function SubGroup({ label, items, storageKey }: { label: string; items: NavItem[
           {label}
         </span>
       </button>
-      {open && <NavItems items={items} mini={false} />}
+      {open && <NavItems items={items} mini={false} onNavigate={onNavigate} />}
     </div>
   )
 }
 
-function AppSection({ logo, label, groups, mini, storageKey }: {
+function AppSection({ logo, label, groups, mini, storageKey, onNavigate }: {
   logo: string
   label: string
   groups: NavGroup[]
   mini: boolean
   storageKey: string
+  onNavigate?: () => void
 }) {
   const [open, setOpen] = usePersistedBool(storageKey, true)
   const allItems = groups.flatMap((g) => g.items)
@@ -200,7 +202,7 @@ function AppSection({ logo, label, groups, mini, storageKey }: {
         <div className="flex justify-center pt-4 pb-1" title={label}>
           <img src={logo} alt={label} className="h-6 w-6 rounded-full border border-aura-100 bg-white object-contain" />
         </div>
-        <NavItems items={allItems} mini />
+        <NavItems items={allItems} mini onNavigate={onNavigate} />
       </>
     )
   }
@@ -220,9 +222,15 @@ function AppSection({ logo, label, groups, mini, storageKey }: {
       {open &&
         groups.map((g, i) =>
           g.label === null ? (
-            <NavItems key={i} items={g.items} mini={false} />
+            <NavItems key={i} items={g.items} mini={false} onNavigate={onNavigate} />
           ) : (
-            <SubGroup key={g.label} label={g.label} items={g.items} storageKey={`${storageKey}-${g.label}`} />
+            <SubGroup
+              key={g.label}
+              label={g.label}
+              items={g.items}
+              storageKey={`${storageKey}-${g.label}`}
+              onNavigate={onNavigate}
+            />
           ),
         )}
     </>
@@ -242,6 +250,23 @@ export default function Layout() {
     setMobileOpen(false)
   }, [pathname, search])
 
+  // Menu mobile ouvert : la page derrière ne défile plus. Sans cela, le
+  // geste de défilement partait dans la page au lieu du menu, qui semblait
+  // bloqué — et la fermeture rendait la position de lecture aléatoire.
+  useEffect(() => {
+    if (!mobileOpen) return
+    const precedent = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const fermer = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileOpen(false)
+    }
+    window.addEventListener('keydown', fermer)
+    return () => {
+      document.body.style.overflow = precedent
+      window.removeEventListener('keydown', fermer)
+    }
+  }, [mobileOpen])
+
   const visible = (items: NavItem[]) =>
     items.filter((item) => !item.module || canAccessModule(profile, item.module))
   const deskItems = visible(DESK_NAV)
@@ -254,15 +279,18 @@ export default function Layout() {
   // Planet'Stock et Planet'Dash embarquent leur propre fond : pleine largeur.
   const fullBleed = pathname.startsWith('/stock') || pathname.startsWith('/dash')
 
-  const navBody = (mini: boolean) => (
+  // `onNavigate` : sur téléphone, un appui sur un lien ferme le menu — y
+  // compris quand il pointe vers la page déjà ouverte, où l'URL ne change
+  // pas et où le menu restait donc affiché, comme figé.
+  const navBody = (mini: boolean, onNavigate?: () => void) => (
     <>
       <NotificationsBell mini={mini} />
-      <NavItems items={deskItems} mini={mini} />
+      <NavItems items={deskItems} mini={mini} onNavigate={onNavigate} />
 
-      <AppSection logo={logos.projects} label="Planet’Projects" groups={[{ label: null, items: projectItems.length > 1 ? projectItems : [] }]} mini={mini} storageKey="desk-nav-projects" />
-      <AppSection logo={logos.dash} label="Planet’Dash" groups={[{ label: null, items: dashItems }]} mini={mini} storageKey="desk-nav-dash" />
-      <AppSection logo={logos.stock} label="Planet’Stock" groups={stockGroups} mini={mini} storageKey="desk-nav-stock" />
-      <AppSection logo={logos.claim} label="Planet’Claim" groups={[{ label: null, items: claimItems }]} mini={mini} storageKey="desk-nav-claim" />
+      <AppSection logo={logos.projects} label="Planet’Projects" groups={[{ label: null, items: projectItems.length > 1 ? projectItems : [] }]} mini={mini} storageKey="desk-nav-projects" onNavigate={onNavigate} />
+      <AppSection logo={logos.dash} label="Planet’Dash" groups={[{ label: null, items: dashItems }]} mini={mini} storageKey="desk-nav-dash" onNavigate={onNavigate} />
+      <AppSection logo={logos.stock} label="Planet’Stock" groups={stockGroups} mini={mini} storageKey="desk-nav-stock" onNavigate={onNavigate} />
+      <AppSection logo={logos.claim} label="Planet’Claim" groups={[{ label: null, items: claimItems }]} mini={mini} storageKey="desk-nav-claim" onNavigate={onNavigate} />
 
       {profile?.role === 'admin' && (
         <>
@@ -274,6 +302,7 @@ export default function Layout() {
           <NavLink
             to="/administration"
             title="Administration"
+            onClick={onNavigate}
             className={({ isActive }) => `${itemClass(isActive, mini)} ${mini ? 'mt-3' : ''}`}
           >
             <span className="text-base w-5 text-center shrink-0">⚙</span>
@@ -282,6 +311,7 @@ export default function Layout() {
           <NavLink
             to="/journal"
             title="Journal d'activité"
+            onClick={onNavigate}
             className={({ isActive }) => itemClass(isActive, mini)}
           >
             <span className="text-base w-5 text-center shrink-0">📝</span>
@@ -307,28 +337,31 @@ export default function Layout() {
           {mobileOpen ? '✕' : '☰'}
         </button>
       </header>
+      {/* Panneau plein écran : la liste est longue (jusqu'à 24 entrées) et
+          ne tenait pas dans les 85 % de hauteur d'écran précédents. Elle a
+          désormais toute la place, son propre défilement, et l'en-tête et
+          le pied restent visibles. */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-aura-950/40" onClick={() => setMobileOpen(false)} />
-          <div className="absolute top-0 left-0 right-0 max-h-[85vh] overflow-y-auto bg-white border-b border-aura-100 shadow-xl">
-            <div className="flex items-center gap-3 px-4 py-2.5 border-b border-aura-100">
-              <img src={logos.desk} alt="" className="h-8 w-8 rounded-full border border-aura-100 bg-white p-0.5 object-contain" />
-              <div className="font-extrabold text-aura-950 flex-1">Planet’Desk</div>
-              <button onClick={() => setMobileOpen(false)} className="text-2xl text-aura-800 px-1" aria-label="Fermer">✕</button>
-            </div>
-            <nav className="p-3 space-y-1">{navBody(false)}</nav>
-            {profile && (
-              <div className="px-4 py-3 border-t border-aura-100 flex items-center gap-2.5">
-                <Avatar name={profile.full_name} size={8} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold truncate text-aura-950">{profile.full_name}</div>
-                  <button onClick={signOut} className="text-[11px] text-aura-700/70 hover:text-aura-950">
-                    {demoMode ? 'Mode démo' : 'Se déconnecter'}
-                  </button>
-                </div>
-              </div>
-            )}
+        <div className="md:hidden fixed inset-0 z-50 flex flex-col bg-white">
+          <div className="flex items-center gap-3 px-4 py-2.5 border-b border-aura-100 shrink-0">
+            <img src={logos.desk} alt="" className="h-8 w-8 rounded-full border border-aura-100 bg-white p-0.5 object-contain" />
+            <div className="font-extrabold text-aura-950 flex-1">Planet’Desk</div>
+            <button onClick={() => setMobileOpen(false)} className="text-2xl text-aura-800 px-1" aria-label="Fermer">✕</button>
           </div>
+          <nav className="flex-1 overflow-y-auto overscroll-contain p-3 space-y-1">
+            {navBody(false, () => setMobileOpen(false))}
+          </nav>
+          {profile && (
+            <div className="px-4 py-3 border-t border-aura-100 flex items-center gap-2.5 shrink-0">
+              <Avatar name={profile.full_name} size={8} />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold truncate text-aura-950">{profile.full_name}</div>
+                <button onClick={signOut} className="text-[11px] text-aura-700/70 hover:text-aura-950">
+                  {demoMode ? 'Mode démo' : 'Se déconnecter'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

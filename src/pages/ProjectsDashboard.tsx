@@ -117,8 +117,8 @@ export default function ProjectsDashboard() {
         </div>
       </Card>
 
-      <div className="grid lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 space-y-5">
+      <div className="grid lg:grid-cols-3 gap-5 min-w-0">
+        <div className="lg:col-span-2 min-w-0 space-y-5">
           <Card
             title={<span className="text-coral-600">Notifications importantes</span>}
             action={unread.length > 0 && (
@@ -176,7 +176,8 @@ export default function ProjectsDashboard() {
             {upcoming.length === 0 ? (
               <EmptyState>Aucune tâche à échéance dans les 14 prochains jours.</EmptyState>
             ) : (
-              <table className="w-full">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px]">
                 <thead>
                   <tr>
                     <th className="table-head rounded-l-lg">Libellé</th>
@@ -197,7 +198,8 @@ export default function ProjectsDashboard() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+                </table>
+              </div>
             )}
           </Card>
         </div>
