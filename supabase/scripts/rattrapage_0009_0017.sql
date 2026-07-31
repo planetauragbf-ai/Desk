@@ -1,4 +1,45 @@
 -- ============================================================
+-- Planet'Desk — RATTRAPAGE : dossiers (0009) + sécurité (0017)
+-- À exécuter EN UNE FOIS dans Supabase → SQL Editor.
+-- Regroupe la migration 0009 (dossiers de Documents et de Liens &
+-- outils, jamais exécutée) et la migration 0017 (verrouillage de la
+-- sécurité), dans le bon ordre.
+-- ============================================================
+
+-- ============================================================
+-- Planet'Desk — Dossiers gérés par les utilisateurs
+-- À exécuter APRÈS 0008_desk.sql.
+-- Table des dossiers des espaces Documents (kind = 'documents')
+-- et Liens & outils (kind = 'liens') : création, renommage et
+-- suppression depuis l'application.
+-- ============================================================
+
+create table if not exists public.folders (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null,                 -- 'documents' | 'liens'
+  name text not null,
+  created_at timestamptz not null default now(),
+  unique (kind, name)
+);
+
+alter table public.folders enable row level security;
+
+create policy "folders_all" on public.folders
+  for all to authenticated using (true) with check (true);
+
+-- Dossiers de départ
+insert into public.folders (kind, name) values
+  ('documents', 'Général'),
+  ('documents', 'Projets'),
+  ('documents', 'CR réunions'),
+  ('documents', 'Contrats'),
+  ('documents', 'Directives'),
+  ('liens', 'Général'),
+  ('liens', 'Communication'),
+  ('liens', 'Gestion'),
+  ('liens', 'Design')
+on conflict (kind, name) do nothing;
+-- ============================================================
 -- Planet'Desk — Verrouillage de la sécurité (modèle « intermédiaire »)
 -- À exécuter APRÈS 0016_claim_v2.sql.
 --
