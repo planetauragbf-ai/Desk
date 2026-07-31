@@ -1,6 +1,48 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { loadDash, saveDash } from "./storage.js";
 import { logDash, loadShip24Key, getShip24Key, createClaimFromShipping, runDashAlerts } from "./integration.js";
+import { loadAdherents, mergeAdherentNames } from "../lib/adherents";
+
+/** Vrai sur écran étroit (téléphone) : la grille cède la place à des cartes. */
+function useIsMobileDash() {
+  const [m, setM] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
+  useEffect(() => {
+    const onResize = () => setM(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return m;
+}
+
+/** Carte d'expédition (affichage téléphone). */
+function ShipCard({ s, statusMeta, onOpen, onMenu, menuOpen, isProd, onAction }) {
+  return (
+    <div style={{ background: "var(--bg2)", border: "1px solid var(--b1)", borderRadius: 10, padding: 12, marginBottom: 8, position: "relative" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <span style={{ fontFamily: "var(--mono)", fontWeight: 800, color: "var(--accent)", fontSize: 14 }}>{s.id}</span>
+        <span style={{ background: (statusMeta?.color || "#64748b") + "18", color: statusMeta?.color || "#64748b", borderRadius: 20, padding: "2px 9px", fontSize: 10, fontWeight: 700 }}>
+          {statusMeta?.label || s.status}
+        </span>
+        <div style={{ marginLeft: "auto", position: "relative" }}>
+          <button onClick={(e) => { e.stopPropagation(); onMenu(); }}
+            style={{ background: "var(--bg3)", border: "1px solid var(--b1)", borderRadius: 6, cursor: "pointer", fontSize: 15, padding: "2px 8px" }}>⋮</button>
+          {menuOpen && <ActionsPopover s={s} isProd={isProd} onAction={onAction} onClose={onMenu} />}
+        </div>
+      </div>
+      <div onClick={onOpen} style={{ cursor: "pointer", fontSize: 12, lineHeight: 1.7 }}>
+        <div style={{ fontWeight: 700 }}>{[s.dest?.prenom, s.dest?.nom].filter(Boolean).join(" ") || "—"}</div>
+        <div style={{ color: "var(--t2)" }}>{[s.dest?.ville, s.dest?.pays].filter(Boolean).join(", ") || "—"}</div>
+        <div style={{ color: "var(--t2)" }}>🏭 {s.exp?.nom || "—"}</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, color: "var(--t2)", marginTop: 4 }}>
+          <span>✈ {s.dateEnlevement || "—"}</span>
+          <span>📬 {s.dateLivSouhaitee || "—"}</span>
+          <span>🍾 {s.nbBtl || 0}</span>
+        </div>
+        {s.tracking?.number && <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--accent)" }}>{s.tracking.number}</div>}
+      </div>
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════
 // SHIP24 API
@@ -271,6 +313,8 @@ const btnSmS = { padding: "4px 10px", borderRadius: 6, border: "1px solid var(--
 export default function App() {
   const [shippings, setShippings] = useState(INIT);
   const [dashLoaded, setDashLoaded] = useState(false);
+  const [adherentNames, setAdherentNames] = useState([]);
+  const isMobile = useIsMobileDash();
   const [mainTab, setMainTab] = useState("ue");
   const [usaTab, setUsaTab] = useState("usa_first");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -295,6 +339,9 @@ export default function App() {
       }
       setDashLoaded(true);
       loadShip24Key();
+      loadAdherents().then((ref) =>
+        setAdherentNames(mergeAdherentNames(ref, (d?.shippings || []).map((s) => s.exp?.nom))),
+      );
       runDashAlerts(Array.isArray(d?.shippings) ? d.shippings : []);
     });
   }, []);
@@ -507,10 +554,12 @@ export default function App() {
 
       {showFilters && (
         <div style={{ padding: "8px 24px", display: "flex", gap: 10, borderBottom: "1px solid var(--b2)", background: "var(--bg3)", flexWrap: "wrap", alignItems: "center" }}>
-          {[["pays", "Pays"], ["adherent", "Adhérent"]].map(([k, l]) => (
-            <input key={k} value={filters[k]} onChange={(e) => setFilters({ ...filters, [k]: e.target.value })} placeholder={l + "…"}
-              style={{ padding: "5px 9px", borderRadius: 5, border: "1px solid var(--b1)", background: "var(--bg2)", color: "var(--t1)", fontSize: 11, width: 130, outline: "none", fontFamily: "var(--font)" }} />
-          ))}
+          <input value={filters.pays} onChange={(e) => setFilters({ ...filters, pays: e.target.value })} placeholder="Pays…"
+            style={{ padding: "5px 9px", borderRadius: 5, border: "1px solid var(--b1)", background: "var(--bg2)", color: "var(--t1)", fontSize: 11, width: 130, outline: "none", fontFamily: "var(--font)" }} />
+          {/* Adhérents : référentiel unique Planet'Stock */}
+          <input value={filters.adherent} onChange={(e) => setFilters({ ...filters, adherent: e.target.value })} placeholder="Adhérent…" list="dash-adherents"
+            style={{ padding: "5px 9px", borderRadius: 5, border: "1px solid var(--b1)", background: "var(--bg2)", color: "var(--t1)", fontSize: 11, width: 130, outline: "none", fontFamily: "var(--font)" }} />
+          <datalist id="dash-adherents">{adherentNames.map((n) => <option key={n} value={n} />)}</datalist>
           <select value={filters.incoterm} onChange={(e) => setFilters({ ...filters, incoterm: e.target.value })} style={{ padding: "5px 8px", borderRadius: 5, border: "1px solid var(--b1)", background: "var(--bg2)", fontSize: 11, fontFamily: "var(--font)", cursor: "pointer" }}>
             <option value="">Incoterm…</option><option>DDP</option><option>DAP</option><option>EXW</option>
           </select>
@@ -530,7 +579,7 @@ export default function App() {
             return (
             <>
             <div style={{
-              display: "grid", gridTemplateColumns: gc,
+              display: isMobile ? "none" : "grid", gridTemplateColumns: gc,
               padding: "7px 10px", borderBottom: "1px solid var(--b1)",
               background: "var(--accent)", color: "#fff",
               fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em",
@@ -552,10 +601,18 @@ export default function App() {
             </div>
 
             {/* Rows */}
-            <div style={{ flex: 1, overflow: "auto" }}>
+            <div style={{ flex: 1, overflow: "auto", padding: isMobile ? 10 : 0 }}>
               {data.length === 0 ? (
                 <div style={{ padding: 48, textAlign: "center", color: "var(--t3)", fontSize: 13 }}>Aucun shipping ici.</div>
-              ) : data.map((s) => (
+              ) : isMobile ? data.map((s) => (
+                <ShipCard key={s.id} s={s}
+                  statusMeta={STATUSES.find((x) => x.key === s.status)}
+                  onOpen={() => setDetailId(detailId === s.id ? null : s.id)}
+                  onMenu={() => setMenuId(menuId === s.id ? null : s.id)}
+                  menuOpen={menuId === s.id}
+                  isProd={isProd}
+                  onAction={handleAction} />
+              )) : data.map((s) => (
                 <div key={s.id} className="row-hover" style={{
                   display: "grid", gridTemplateColumns: gc,
                   padding: "8px 10px", borderBottom: "1px solid var(--b2)",
