@@ -38,12 +38,11 @@ let syncChannel = null;
 export async function fetchCloudState() {
   if (!supabase) return null;
   try {
-    const { data, error } = await withTimeout(
-      supabase.from("app_state").select("value").eq("key", SK).maybeSingle(),
-      5000
-    );
-    if (error || !data?.value) return null;
-    return data.value;
+    // stock_state() applique le cloisonnement côté serveur : état complet
+    // pour un salarié interne, données du seul adhérent concerné sinon.
+    const { data, error } = await withTimeout(supabase.rpc("stock_state"), 5000);
+    if (error || !data) return null;
+    return data;
   } catch {
     return null;
   }
@@ -100,13 +99,10 @@ export function subscribeSync(onRemoteState) {
 export async function loadState() {
   if (supabase) {
     try {
-      const { data, error } = await withTimeout(
-        supabase.from("app_state").select("value").eq("key", SK).maybeSingle(),
-        5000
-      );
-      if (!error && data?.value) {
-        currentRev = data.value._rev || 0;
-        return data.value;
+      const { data, error } = await withTimeout(supabase.rpc("stock_state"), 5000);
+      if (!error && data) {
+        currentRev = data._rev || 0;
+        return data;
       }
       if (error) console.warn("Supabase load:", error.message, "→ repli localStorage");
     } catch (e) {
@@ -128,6 +124,8 @@ export async function loadState() {
 // (voir supabase/phase2-securite.sql). Non bloquant : si l'auth échoue,
 // l'application continue tant que le verrouillage n'est pas activé.
 export async function ensureCloudAuth(email, password) {
+  // Les comptes sont créés par l'administrateur dans Planet'Desk :
+  // plus aucune inscription automatique depuis le module stock.
   if (!supabase) return { ok: true, mode: "local" };
   try {
     const { error } = await withTimeout(
@@ -135,14 +133,7 @@ export async function ensureCloudAuth(email, password) {
       6000
     );
     if (!error) return { ok: true, mode: "signin" };
-    // Compte inexistant → création automatique (migration en douceur)
-    const { error: e2 } = await withTimeout(supabase.auth.signUp({ email, password }), 6000);
-    if (!e2) {
-      await withTimeout(supabase.auth.signInWithPassword({ email, password }), 6000).catch(() => {});
-      return { ok: true, mode: "signup" };
-    }
-    console.warn("Supabase Auth:", e2.message);
-    return { ok: false, msg: e2.message };
+    return { ok: false, msg: error.message };
   } catch (e) {
     return { ok: false, msg: String(e?.message || e) };
   }

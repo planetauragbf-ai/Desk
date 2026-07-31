@@ -192,6 +192,9 @@ function buildIndex(d: AssistantData): Doc[] {
   }
   for (const m of d.messages) {
     const channel = d.channels.find((c) => c.id === m.channel_id)
+    // Les conversations privées et les messages directs restent hors index :
+    // seuls leurs membres doivent pouvoir en retrouver le contenu.
+    if (!channel || channel.private || channel.dm) continue
     docs.push({
       result: {
         kind: 'message',
@@ -218,7 +221,8 @@ function buildIndex(d: AssistantData): Doc[] {
         to: '/calendrier',
       },
       haystackTitle: `${name(l.profile_id)} ${LEAVE_LABELS[l.type] ?? l.type}`,
-      haystackBody: `${l.reason} conge absence ${l.start_date}`,
+      // Le motif n'est jamais indexé : il peut relever du secret médical.
+      haystackBody: `conge absence ${l.start_date}`,
       date: l.created_at,
     })
   }

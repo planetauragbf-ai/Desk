@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, Component } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef, Component } from "react";
 import { loadState, saveState, uploadPhoto, deletePhoto, subscribeSync, fetchCloudState, ensureCloudAuth, cloudSignOut } from "./storage.js";
 
 class ErrorBoundary extends Component {
@@ -1965,19 +1965,35 @@ factures:raw.factures||defaultState.factures,
 fournitures:raw.fournitures||defaultState.fournitures,
 espaces:raw.espaces||defaultState.espaces,
 comptaMatiere:raw.comptaMatiere||{pertes:[],documents:[]},
-users:raw.users||[
-{id:"U001",nom:"Emma",email:"emma@planet-aura.com",mdp:"emma2026",role:"admin",permissions:{entrees:true,sorties:true,references:true,espaces:true,facturation:true,compta:true,grille:true},creeLe:"2026-01-01"},
-{id:"U002",nom:"Adam",email:"adam@planet-aura.com",mdp:"adam2026",role:"logisticien",permissions:{entrees:true,sorties:true,references:true,espaces:true,facturation:false,compta:false,grille:false},creeLe:"2026-01-15"},
-{id:"U003",nom:"Lucas",email:"lucas@planet-aura.com",mdp:"lucas2026",role:"logisticien",permissions:{entrees:true,sorties:true,references:false,espaces:true,facturation:false,compta:false,grille:false},creeLe:"2026-02-01"},
-],
+users:raw.users||[],  // Comptes gérés dans Planet'Desk (plus de comptes en dur)
 auditLog:raw.auditLog||[],
 };
 sR(safe);sLd(false);});},[]);
 
 const sD=useCallback(nd=>{sR(nd);sv(nd);},[]);
 
+// Onglets réellement autorisés : sert à la fois au filtrage de l'URL et
+// au rendu (un onglet interdit n'affiche aucune donnée).
+const allowedTabIds=useMemo(()=>{
+  if(!currentUser)return[];
+  if(currentUser.role==="adherent")return adherentTabs.map(t=>t.id);
+  if(currentUser.role==="admin")return adminTabs.map(t=>t.id);
+  const p=currentUser.permissions||{};
+  const ids=["dashboard"];
+  if(p.entrees)ids.push("entrees","references");
+  if(p.sorties)ids.push("sorties");
+  if(p.espaces)ids.push("espaces");
+  if(p.facturation)ids.push("facturation");
+  if(p.compta)ids.push("compta");
+  if(p.grille)ids.push("grille");
+  ids.push("journal");
+  return ids;
+},[currentUser]);
+
 // Mode intégré : l'onglet actif est piloté par le menu de Planet'Desk.
-useEffect(()=>{if(forcedTab)sTab(forcedTab);},[forcedTab]);
+// Il n'est appliqué que s'il fait partie des onglets autorisés (sinon on
+// pourrait ouvrir n'importe quel onglet en modifiant l'URL).
+useEffect(()=>{if(forcedTab&&allowedTabIds.includes(forcedTab))sTab(forcedTab);},[forcedTab,allowedTabIds]);
 
 // Synchro temps réel : adopte les modifications faites sur les autres
 // appareils (ordinateur / téléphone / autres sessions) dès qu'elles arrivent.
@@ -2056,13 +2072,15 @@ visibleTabs.push({id:"journal",label:"Journal",icon:"📝"});
 // For adherent, filter data to their own
 const filteredData=isAdh?{...d,references:d.references.filter(r=>r.adherentId===currentUser.adherentId),entrees:d.entrees.filter(e=>e.adherentId===currentUser.adherentId),sorties:d.sorties.filter(s=>s.adherentId===currentUser.adherentId),factures:d.factures.filter(f=>f.adherentId===currentUser.adherentId)}:d;
 
-const R=()=>{try{switch(tab){
+const R=()=>{try{
+if(!allowedTabIds.includes(tab))return <Card><div style={{padding:20,textAlign:"center"}}><div style={{fontSize:28,marginBottom:8}}>🔒</div><div style={{fontWeight:700,color:P.tx,marginBottom:4}}>Onglet non autorisé</div><div style={{fontSize:12,color:P.tm}}>Votre administrateur ne vous a pas donné accès à cette partie de Planet'Stock.</div></div></Card>;
+switch(tab){
 case "dashboard":return isAdh?<EspaceAdherent data={d} forcedId={currentUser.adherentId}/>:<Dashboard data={filteredData} setData={sD} currentUser={currentUser}/>;
 case "adherents":return isAdmin?<Adherents data={d} setData={sD}/>:null;
-case "entrees":return <Entrees data={d} setData={sD} currentUser={currentUser}/>;
+case "entrees":return <Entrees data={isAdh?filteredData:d} setData={sD} currentUser={currentUser}/>;
 case "references":return <References data={isAdh?filteredData:d} setData={sD} currentUser={currentUser}/>;
 case "sorties":return <Sorties data={isAdh?filteredData:d} setData={sD} currentUser={currentUser}/>;
-case "espaces":return <Espaces data={d} setData={sD} currentUser={currentUser}/>;
+case "espaces":return <Espaces data={isAdh?filteredData:d} setData={sD} currentUser={currentUser}/>;
 case "facturation":return <Facturation data={isAdh?filteredData:d} setData={sD} currentUser={currentUser}/>;
 case "compta":return <ComptaMatiere data={d} setData={sD}/>;
 case "grille":return <GrilleTarifaire data={d} setData={sD}/>;

@@ -29,6 +29,21 @@ function Guard({ module, children }: { module: ModuleKey; children: ReactNode })
   return <>{children}</>
 }
 
+/** Réservé aux administrateurs : la page n'est même pas montée sinon. */
+function AdminGuard({ children }: { children: ReactNode }) {
+  const { profile } = useAuth()
+  if (profile?.role !== 'admin') return <Navigate to="/tableau-de-bord" replace />
+  return <>{children}</>
+}
+
+/** Tableau de bord Planet'Projects : accessible dès qu'un module l'est. */
+function ProjectsGuard({ children }: { children: ReactNode }) {
+  const { profile } = useAuth()
+  const ok = (['objectifs', 'pilotage', 'workflows', 'notes'] as const).some((m) => canAccessModule(profile, m))
+  if (!ok) return <Navigate to="/tableau-de-bord" replace />
+  return <>{children}</>
+}
+
 /** Première connexion : changement obligatoire du mot de passe provisoire. */
 function ForcePasswordScreen() {
   const { profile, completeForcedPasswordChange, signOut } = useAuth()
@@ -127,15 +142,15 @@ export default function App() {
         <Route path="/dash" element={<Guard module="dash"><DashPage /></Guard>} />
         <Route path="/calendrier" element={<Guard module="calendrier"><CalendarPage /></Guard>} />
         <Route path="/claim" element={<Guard module="claim"><ClaimPage /></Guard>} />
-        <Route path="/projets" element={<ProjectsDashboard />} />
+        <Route path="/projets" element={<ProjectsGuard><ProjectsDashboard /></ProjectsGuard>} />
         <Route path="/objectifs" element={<Guard module="objectifs"><Objectives /></Guard>} />
         <Route path="/objectifs/:id" element={<Guard module="objectifs"><ObjectiveDetail /></Guard>} />
         <Route path="/pilotage" element={<Guard module="pilotage"><Pilotage /></Guard>} />
         <Route path="/workflows" element={<Guard module="workflows"><Workflows /></Guard>} />
         <Route path="/notes" element={<Guard module="notes"><NotesPage /></Guard>} />
         <Route path="/documents" element={<Guard module="documents"><DocumentsPage /></Guard>} />
-        <Route path="/administration" element={<Administration />} />
-        <Route path="/journal" element={<JournalPage />} />
+        <Route path="/administration" element={<AdminGuard><Administration /></AdminGuard>} />
+        <Route path="/journal" element={<AdminGuard><JournalPage /></AdminGuard>} />
         <Route path="*" element={<Navigate to="/tableau-de-bord" replace />} />
       </Route>
     </Routes>

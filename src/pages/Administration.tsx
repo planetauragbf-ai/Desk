@@ -1,8 +1,9 @@
-import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { APP_INFO, useBranding, type AppKey } from '../context/BrandingContext'
 import { useTable } from '../hooks/useTable'
 import { insert, remove, update } from '../lib/data'
+import { supabase } from '../lib/supabase'
 import { MODULES, PERM_DETAILS } from '../lib/permissions'
 import type { DetailedPerms, Objective, Profile, StockAccess } from '../lib/types'
 import { Avatar, Card, EmptyState, Modal } from '../components/ui'
@@ -372,23 +373,30 @@ function BrandingCard() {
 
 /** Clés d'intégration externes (ex. Ship24 pour Planet'Dash). */
 function IntegrationsCard() {
-  const { rows: settings, refresh } = useTable('app_settings')
-  const [value, setValue] = useState<string | null>(null)
+  const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const row = settings.find((s) => s.key === 'ship24_api_key')
-  const current = value ?? row?.value ?? ''
+  // Les secrets vivent dans app_secrets (lecture réservée aux admins),
+  // jamais dans app_settings qui est lisible publiquement.
+  useEffect(() => {
+    if (!supabase) return
+    supabase.from('app_secrets').select('value').eq('key', 'ship24_api_key').maybeSingle()
+      .then(({ data }) => setValue(data?.value ?? ''))
+  }, [])
 
   async function save() {
     setBusy(true)
     setMessage(null)
+    setError(null)
     try {
-      const v = current.trim()
-      if (row) await update('app_settings', row.id, { value: v, updated_at: new Date().toISOString() })
-      else await insert('app_settings', { key: 'ship24_api_key', value: v, updated_at: new Date().toISOString() })
-      setMessage(v ? 'Clé enregistrée. Le suivi automatique Ship24 est actif.' : 'Clé effacée : le suivi reste manuel.')
-      refresh()
+      if (!supabase) return
+      const v = value.trim()
+      const { error: err } = await supabase.from('app_secrets')
+        .upsert({ key: 'ship24_api_key', value: v, updated_at: new Date().toISOString() })
+      if (err) setError(err.message)
+      else setMessage(v ? 'Clé enregistrée (accessible aux seuls administrateurs).' : 'Clé effacée.')
     } finally {
       setBusy(false)
     }
@@ -397,9 +405,9 @@ function IntegrationsCard() {
   return (
     <Card title="Intégrations — Suivi des expéditions (Ship24)">
       <p className="text-sm text-aura-700/80 mb-3">
-        Clé API utilisée par Planet'Dash pour récupérer automatiquement les statuts de livraison.
-        Tant qu'elle est vide, les statuts restent saisis manuellement. La clé n'est jamais dans le
-        code : elle est stockée ici et modifiable à tout moment.
+        Clé API destinée au suivi automatique des livraisons dans Planet'Dash.
+        <strong> Le raccordement à Ship24 reste à construire</strong> : en attendant, les statuts
+        sont saisis manuellement. La clé est stockée à part, lisible des seuls administrateurs.
       </p>
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-64">
@@ -408,13 +416,14 @@ function IntegrationsCard() {
             type="password"
             className="input font-mono"
             placeholder="Collez la clé quand vous l'aurez…"
-            value={current}
+            value={value}
             onChange={(e) => setValue(e.target.value)}
           />
         </div>
         <button className="btn-primary" onClick={save} disabled={busy}>{busy ? 'Enregistrement…' : 'Enregistrer'}</button>
       </div>
       {message && <p className="text-sm text-emerald-700 mt-2">{message}</p>}
+      {error && <p className="text-sm text-coral-600 mt-2">{error}</p>}
     </Card>
   )
 }

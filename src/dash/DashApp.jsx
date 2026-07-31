@@ -450,7 +450,9 @@ export default function App() {
   const addProdSheet = (name) => { if (name && !prodSheets.includes(name)) { setProdSheets([...prodSheets, name]); setActiveProdSheet(name); } setModal(null); };
   const toggleCheck = (id) => { setCheckedIds((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; }); };
   const toggleAll = () => { checkedIds.size === data.length ? setCheckedIds(new Set()) : setCheckedIds(new Set(data.map((s) => s.id))); };
-  const handleSync = () => { setApiStatus("syncing"); setTimeout(() => { setApiStatus("ok"); setLastSync(new Date()); }, 1800); };
+  // Le raccordement à Ship24 reste à construire : plutôt qu'une fausse
+// synchronisation, on l'annonce clairement.
+const handleSync = () => { alert("Le suivi automatique Ship24 n'est pas encore raccordé.\n\nLes statuts sont pour l'instant saisis manuellement (menu ⋮ → Modifier le statut)."); };
 
   const exportCSV = () => {
     const h = ["ID", "Statut", "Enlèvement", "Expéditeur", "Ville", "Destinataire", "Pays Dest", "Btl", "Tracking", "Locked", "Montant"];
@@ -487,9 +489,9 @@ export default function App() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 5, background: "var(--bg3)", fontSize: 10, fontWeight: 600 }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: apiStatus === "ok" ? "#10b981" : "#f59e0b", animation: apiStatus === "syncing" ? "pulse 1s infinite" : "none" }} />
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#f59e0b" }} />
             <span style={{ color: "var(--t2)" }}>Ship24</span>
-            <span style={{ color: apiStatus === "ok" ? "#10b981" : "#f59e0b" }}>{apiStatus === "ok" ? "OK" : "…"}</span>
+            <span style={{ color: "#f59e0b" }}>non raccordé</span>
           </div>
           <button onClick={handleSync} style={btnSmS}>🔄</button>
         </div>
