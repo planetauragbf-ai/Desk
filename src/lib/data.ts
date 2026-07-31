@@ -19,6 +19,9 @@ export interface OrderBy {
 let auditActor: { id: string; name: string } | null = null
 export function setAuditActor(actor: { id: string; name: string } | null) {
   auditActor = actor
+  // Exposé pour les modules JavaScript embarqués (Planet'Dash, Planet'Stock)
+  // qui tracent leurs actions et créent des dossiers au nom de l'utilisateur.
+  ;(window as unknown as { __deskActor: typeof actor }).__deskActor = actor
 }
 
 type Row = Record<string, unknown>

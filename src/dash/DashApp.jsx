@@ -1,17 +1,19 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { loadDash, saveDash } from "./storage.js";
+import { logDash, loadShip24Key, getShip24Key, createClaimFromShipping, runDashAlerts } from "./integration.js";
 
 // ═══════════════════════════════════════════════════════════════
 // SHIP24 API
 // ═══════════════════════════════════════════════════════════════
-const SHIP24_KEY = "VOTRE_CLE_API_SHIP24";
+// Clé API Ship24 : réglée dans Administration → Réglages (jamais en dur).
+const SHIP24_KEY = () => getShip24Key();
 const SHIP24 = "https://api.ship24.com/public/v1";
 const ship24 = {
   async createTracker(num, courier) {
     const b = { trackingNumber: num }; if (courier) b.courierCode = [courier];
-    try { const r = await fetch(`${SHIP24}/trackers`, { method: "POST", headers: { Authorization: `Bearer ${SHIP24_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify(b) }); return r.json(); } catch { return null; }
+    try { const r = await fetch(`${SHIP24}/trackers`, { method: "POST", headers: { Authorization: `Bearer ${SHIP24_KEY()}`, "Content-Type": "application/json" }, body: JSON.stringify(b) }); return r.json(); } catch { return null; }
   },
-  async getResults(id) { try { const r = await fetch(`${SHIP24}/trackers/${id}/results`, { headers: { Authorization: `Bearer ${SHIP24_KEY}` } }); return r.json(); } catch { return null; } },
+  async getResults(id) { try { const r = await fetch(`${SHIP24}/trackers/${id}/results`, { headers: { Authorization: `Bearer ${SHIP24_KEY()}` } }); return r.json(); } catch { return null; } },
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -62,17 +64,10 @@ const mk = (id, o) => ({
   vins: o.vins || [], usaSheet: o.sheet || null, isRxp: false, rxpParentId: null,
 });
 
-const INIT = [
-  mk("6234", { dashboard: "usa_first", status: "pickup", de: "08/04/26", prec: "AVANT", en: "Château de Beaupré", ea: "3525 rd7n - Château de Beaupré 13760 Saint-Cannat France", ee: "boutique@beaupre.fr", et: "0771625812", dn: "IRWIN", dp: "CYNTHIA", da: "105 Walnut Street", dcp: "30673", dv: "Washington", dpy: "États-Unis - Georgie", dem: "cinchi333@gmail.com", dt: "7755309939", di: "test", nb: 12, colis: "1 × 12 bout.", champ: false, inc: "DDP", ass: true, transp: "", val: 17475, col: 1, pds: 18 }),
-  mk("6230", { dashboard: "usa_first", status: "pickup", de: "09/04/26", prec: "AVANT", en: "LA CAVE DE LA MADELEINE", ea: "45 Rue Boissy d'Anglas 75008 Paris France", ee: "lacavedelamadeleine@duvaletblanchet.com", et: "01.83.89.21.08", dn: "MASTROGIOVANNI", dp: "PETERS", da: "2504 WESTERN AVE APARTMENT 725", dcp: "98121 3312", dv: "SEATTLE", dpy: "États-Unis - Washington", dem: "peter.mastrogiovanni@gmail.com", dt: "9176286177", nb: 12, colis: "1 × 12 bout.", champ: false, inc: "DDP", ass: true, transp: "", val: 56749, col: 1, pds: 18 }),
-  mk("6227", { dashboard: "usa_first", status: "pickup", de: "08/04/26", prec: "AVANT", en: "CHATEAU LA COSTE", ea: "2750 ROUTE DE LA CRIDE 13610 Le Puy-Sainte-Réparade France", ee: "belen.gimenez@chateau-la-coste.com", et: "0442619290", dn: "BOLAND", dp: "ANDREW", da: "COURTHOYLE OLD ADAMSTOWN ENNISCORTHY", dcp: "y21N564", dv: "WEXFORD", dpy: "Irlande", dem: "andrew.bolan", dt: "0872573609", note: "BOLAND ANDREW on a renseigné 1 carton de 12, mais on va faire 2 cartons de 6.", nb: 12, colis: "2 × 6 bout.", champ: false, inc: "DDP", ass: true, tn: "773980test2", transp: "FedEx", val: 320, col: 2, pds: 18 }),
-  mk("6226", { dashboard: "usa_first", status: "pickup", de: "08/04/26", prec: "AVANT", en: "CHATEAU FORTIA", ea: "10 Route de Bédarrides 84230 Châteauneuf-du-Pape France", ee: "contact@chateau-fortia.com", et: "04 90 83 72 25", dn: "SCHREINER", dp: "LESLIE", da: "1752 PINE RIDGE DR. NE", dcp: "30324", dv: "ATLANTA", dpy: "États-Unis - Georgie", dem: "lesliehschrein", dt: "4042740590", nb: 6, colis: "1 × 6 bout.", champ: false, inc: "DDP", ass: true, transp: "", val: 156, col: 1, pds: 9 }),
-  mk("6225", { dashboard: "ue", status: "pickup", de: "08/04/26", prec: "AVANT", en: "THE WINE BOUTIQUE", ea: "6 Rue Rosa Bonheur 75015 Paris France", ee: "vgerard1970@gmail.com", et: "0665788855", dn: "BOCCETTI", dp: "FABRIZIO", da: "Via Giovanni XXIII, 12", dcp: "00043", dv: "Ciampino (RM)", dpy: "Italie", dem: "boccetti.f@gmail.com", dt: "+39 328 123 4567", nb: 1, colis: "1 × 1 bout.", champ: false, inc: "DDP", ass: true, transp: "", val: 45, col: 1, pds: 3 }),
-  mk("6198", { dashboard: "ue", status: "transit", de: "06/04/26", prec: "AVANT", en: "EARL GERSENDE LEFEVRE", ea: "26 Rue de Villers 51380 Verzy France", ee: "gersende.lefevre@laposte.net", et: "03 26 97 96 99", dn: "ROUARD", dp: "AUGUSTIN", da: "Rue de l'église 31", dcp: "5560", dv: "HOUYET", dpy: "Belgique", dem: "info@augustin-rouard.be", dt: "0473660156", nb: 18, colis: "3 × 6 bout.", champ: true, inc: "DDP", ass: true, tn: "1Z999AA10123456784", transp: "UPS", val: 310.5, col: 3, pds: 27 }),
-  mk("6195", { dashboard: "ue", status: "livre", de: "01/04/26", prec: "AVANT", dle: "03/04/26", en: "CHAMPAGNE ALFRED GRATIEN", ea: "30 Rue Maurice Cerveaux 51201 Épernay France", dn: "FISCHER", dp: "HANS", da: "Müllerstraße 42", dcp: "80469", dv: "München", dpy: "Allemagne", dem: "hans.fischer@gmail.com", dt: "+49 151 234 5678", nb: 12, colis: "2 × 6 bout.", champ: true, inc: "DDP", ass: true, tn: "1Z999BB20234567890", transp: "UPS", val: 480, col: 2, pds: 18 }),
-  mk("6190", { dashboard: "pays_tiers", status: "exception", de: "28/03/26", prec: "AVANT", en: "DOMAINE FONT DU VENT", ea: "Route de Châteauneuf 84350 Courthézon France", dn: "TANAKA", dp: "YUKI", da: "3-14-1 Roppongi", dcp: "106-0032", dv: "Tokyo", dpy: "Japon", dem: "yuki.tanaka@example.jp", dt: "+81 90 1234 5678", nb: 6, colis: "1 × 6 bout.", champ: false, inc: "DDP", ass: true, tn: "773980442029", transp: "FedEx", val: 156, col: 1, pds: 9 }),
-  mk("6185", { dashboard: "pays_tiers", status: "transit", de: "02/04/26", prec: "AVANT", en: "ENJOY VERTU", ea: "8 Rue Dom Pérignon 51200 Épernay France", dn: "WILLIAMS", dp: "SARAH", da: "350 5th Avenue", dv: "New York", dpy: "États-Unis", dem: "sarah.w@example.com", dt: "+1 212 555 0199", nb: 12, colis: "2 × 6 bout.", champ: true, inc: "DDP", ass: true, tn: "1Z999CC30345678901", transp: "UPS", val: 396, col: 2, pds: 18 }),
-];
+// Base vide : les expéditions sont saisies dans l'application
+// (ou importées) — plus aucune donnée de démonstration.
+const INIT = [];
+
 
 // ═══════════════════════════════════════════════════════════════
 // INLINE EDITABLE CELL
@@ -196,6 +191,7 @@ function ActionsPopover({ s, onAction, onClose, isProd }) {
       { key: "status", label: "🔄 Modifier le statut" },
       { key: "duplicate", label: "📋 Dupliquer la ligne" },
       { key: "rxp", label: "🔁 Créer copie RXP" },
+      { key: "sinistre", label: "🛡️ Déclarer un sinistre" },
       { key: "copy_usa", label: "📑 Copier vers feuille USA" },
       ...(isProd ? [{ key: "move_sheet", label: "📄 Déplacer vers autre feuille" }] : []),
     ]},
@@ -298,6 +294,8 @@ export default function App() {
         if (Array.isArray(d.prodSheets) && d.prodSheets.length) { setProdSheets(d.prodSheets); setActiveProdSheet(d.prodSheets[0]); }
       }
       setDashLoaded(true);
+      loadShip24Key();
+      runDashAlerts(Array.isArray(d?.shippings) ? d.shippings : []);
     });
   }, []);
   useEffect(() => {
@@ -308,8 +306,23 @@ export default function App() {
   const activeDashboard = mainTab === "usa" ? usaTab : mainTab;
   const isProd = activeDashboard === "usa_prod";
 
+  // Déclarer un sinistre : crée le dossier Planet'Claim pré-rempli
+  const declareSinistre = async (shipId) => {
+    const s = shippings.find((x) => x.id === shipId);
+    if (!s) return;
+    if (!confirm(`Ouvrir un dossier sinistre pour l'expédition ${shipId} ?\n\nLe dossier Planet'Claim sera pré-rempli (client, transporteur, tracking, valeur…).`)) return;
+    try {
+      const claim = await createClaimFromShipping(s);
+      setShippings((prev) => prev.map((x) => (x.id === shipId ? { ...x, status: "sinistre" } : x)));
+      if (confirm(`Dossier ${claim.ref} créé ✔\n\nOuvrir Planet'Claim maintenant ?`)) window.location.href = "/claim";
+    } catch (e) {
+      alert("Création du dossier impossible : " + (e?.message || e));
+    }
+  };
+
   // Update a shipping field
   const updateShipping = (id, path, val) => {
+    logDash(`Modification expédition ${id} — ${path}`);
     setShippings((prev) => prev.map((s) => {
       if (s.id !== id) return s;
       const clone = JSON.parse(JSON.stringify(s));
@@ -356,6 +369,7 @@ export default function App() {
     if (key === "copy_usa") setModal({ type: "copy_usa", data: { shipId } });
     if (key === "move_sheet") setModal({ type: "move_sheet", data: { shipId } });
     if (key === "rxp") doRxp(shipId);
+    if (key === "sinistre") declareSinistre(shipId);
     // Document & link actions → open in back-office
     if (key === "etiquette") window.open(`${PA}/etiquette.php?id=${shipId}`, "_blank");
     if (key === "da") window.open(`${PA}/da.php?id=${shipId}`, "_blank");
@@ -405,7 +419,7 @@ export default function App() {
   const showTracking = !isProd;
 
   return (
-    <div style={{ "--bg1": "#f5f6f9", "--bg2": "#ffffff", "--bg3": "#eef0f4", "--b1": "#dde0e7", "--b2": "#edf0f5", "--t1": "#1a1d26", "--t2": "#6b7280", "--t3": "#9ca3af", "--accent": "#e8584a", "--accent2": "#c7392d", "--accent-bg": "#e8584a0c", "--font": "'DM Sans', -apple-system, sans-serif", "--mono": "'DM Mono', monospace", fontFamily: "var(--font)", background: "var(--bg1)", color: "var(--t1)", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div style={{ "--bg1": "#f0f5fa", "--bg2": "#ffffff", "--bg3": "#f8fafc", "--b1": "#e2e8f0", "--b2": "#edf2f7", "--t1": "#0f172a", "--t2": "#3f4c60", "--t3": "#64748b", "--accent": "#2e7fa0", "--accent2": "#14435c", "--accent-bg": "#2e7fa00c", "--font": "'DM Sans', -apple-system, sans-serif", "--mono": "'DM Mono', monospace", fontFamily: "var(--font)", background: "var(--bg1)", color: "var(--t1)", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700;9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
