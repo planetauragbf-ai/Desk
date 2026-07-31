@@ -52,8 +52,10 @@ create table if not exists public.claim_events (
 
 alter table public.claims enable row level security;
 alter table public.claim_events enable row level security;
+drop policy if exists "claims_all" on public.claims;
 create policy "claims_all" on public.claims
   for all to authenticated using (true) with check (true);
+drop policy if exists "claim_events_all" on public.claim_events;
 create policy "claim_events_all" on public.claim_events
   for all to authenticated using (true) with check (true);
 

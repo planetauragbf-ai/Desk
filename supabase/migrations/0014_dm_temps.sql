@@ -26,5 +26,6 @@ create table if not exists public.time_entries (
 create index if not exists time_entries_date_idx on public.time_entries (date);
 
 alter table public.time_entries enable row level security;
+drop policy if exists "time_entries_all" on public.time_entries;
 create policy "time_entries_all" on public.time_entries
   for all to authenticated using (true) with check (true);

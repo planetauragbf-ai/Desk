@@ -44,22 +44,33 @@ alter table public.channels enable row level security;
 alter table public.messages enable row level security;
 alter table public.links    enable row level security;
 
+drop policy if exists "channels_all" on public.channels;
 create policy "channels_all" on public.channels for all to authenticated using (true) with check (true);
+drop policy if exists "links_all" on public.links;
 create policy "links_all"    on public.links    for all to authenticated using (true) with check (true);
 
+drop policy if exists "messages_select" on public.messages;
 create policy "messages_select" on public.messages for select to authenticated using (true);
+drop policy if exists "messages_insert" on public.messages;
 create policy "messages_insert" on public.messages for insert to authenticated
   with check (author_id = auth.uid());
 -- Chacun modifie/supprime ses messages ; les administrateurs modèrent tout.
+drop policy if exists "messages_own_update" on public.messages;
 create policy "messages_own_update" on public.messages for update to authenticated
   using (author_id = auth.uid()) with check (author_id = auth.uid());
+drop policy if exists "messages_own_delete" on public.messages;
 create policy "messages_own_delete" on public.messages for delete to authenticated
   using (author_id = auth.uid());
+drop policy if exists "messages_admin_delete" on public.messages;
 create policy "messages_admin_delete" on public.messages for delete to authenticated
   using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
 
 -- ---------- Temps réel : diffusion des nouveaux messages
-alter publication supabase_realtime add table public.messages;
+do $$
+begin
+  alter publication supabase_realtime add table public.messages;
+exception when duplicate_object then null;
+end $$;
 
 -- ---------- Canal par défaut
 insert into public.channels (name, description)
