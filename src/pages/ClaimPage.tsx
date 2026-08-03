@@ -7,35 +7,41 @@ import { supabase } from '../lib/supabase'
 import { notify } from '../lib/notify'
 import { loadAdherents, mergeAdherentNames, type AdherentRef } from '../lib/adherents'
 import { formatDate, formatDateTime, profileName } from '../lib/format'
-import type { Claim, ClaimCategory, ClaimStatus, Priority, Profile } from '../lib/types'
+import type { Carrier, Claim, ClaimCategory, ClaimStatus, ClaimUrgence, Profile } from '../lib/types'
 import { Card, EmptyState, Modal, Skeleton, StatTile } from '../components/ui'
 
+// Types, statuts et urgences : vocabulaire du classeur de suivi PA.
 const CATEGORIES: Record<ClaimCategory, string> = {
-  casse: '🍷 Casse',
-  perte: '📦 Perte',
-  vol: '🚨 Vol',
-  retard: '⏰ Retard de livraison',
-  temperature: '🌡 Température / vin altéré',
-  erreur_livraison: '📍 Erreur de livraison',
-  facturation: '🧾 Facturation',
-  autre: '❓ Autre',
+  'Casse partielle': '🍷 Casse partielle',
+  'Casse totale': '💥 Casse totale',
+  'Coulage / fuite': '💧 Coulage / fuite',
+  'Perte': '📦 Perte',
+  'Vol': '🚨 Vol',
+  'Refus livraison': '📍 Refus livraison',
+  'Altération thermique': '🌡 Altération thermique',
+  'Étiquette tachée': '🏷 Étiquette tachée',
+  'Autre': '❓ Autre',
 }
 
 const STATUSES: Record<ClaimStatus, { label: string; badge: string }> = {
-  nouveau: { label: 'Nouveau', badge: 'bg-aura-100 text-aura-800' },
-  en_cours: { label: 'En instruction', badge: 'bg-sky-100 text-sky-800' },
-  attente_transporteur: { label: 'Attente transporteur', badge: 'bg-amber-100 text-amber-800' },
-  attente_assurance: { label: 'Attente assurance', badge: 'bg-amber-100 text-amber-800' },
-  attente_client: { label: 'Attente client', badge: 'bg-amber-100 text-amber-800' },
-  accepte: { label: 'Accepté / indemnisé', badge: 'bg-emerald-100 text-emerald-800' },
-  refuse: { label: 'Refusé', badge: 'bg-coral-500/15 text-coral-600' },
-  clos: { label: 'Clos', badge: 'bg-aura-100 text-aura-700/70' },
+  'Nouveau': { label: 'Nouveau', badge: 'bg-aura-100 text-aura-800' },
+  'Documents en cours': { label: 'Documents en cours', badge: 'bg-sky-100 text-sky-800' },
+  'Transmis Coste Fermon': { label: 'Transmis Coste Fermon', badge: 'bg-amber-100 text-amber-800' },
+  'En instruction': { label: 'En instruction', badge: 'bg-sky-100 text-sky-800' },
+  'Expertise en cours': { label: 'Expertise en cours', badge: 'bg-amber-100 text-amber-800' },
+  'Accord assureur': { label: 'Accord assureur', badge: 'bg-emerald-100 text-emerald-800' },
+  'Indemnisé': { label: 'Indemnisé', badge: 'bg-emerald-100 text-emerald-800' },
+  'Clôturé': { label: 'Clôturé', badge: 'bg-aura-100 text-aura-700/70' },
+  'Refusé / Sans suite': { label: 'Refusé / Sans suite', badge: 'bg-coral-500/15 text-coral-600' },
+  'Non - Assuré': { label: 'Non - Assuré', badge: 'bg-coral-500/15 text-coral-600' },
 }
 
-const PRIORITIES: Record<Priority, string> = { basse: 'Basse', moyenne: 'Moyenne', haute: 'Haute', critique: 'Critique' }
-const CARRIERS = ['', 'UPS', 'FedEx', 'DHL', 'TNT', 'GLS', 'Colissimo', 'Chronopost', 'DPD', 'Weship', 'Autre']
-const CF_STATUTS = ['', 'À déclarer', 'Déclaré', 'En instruction', 'Accord reçu', 'Refusé', 'Clos']
-const OPEN_STATUSES: ClaimStatus[] = ['nouveau', 'en_cours', 'attente_transporteur', 'attente_assurance', 'attente_client']
+const PRIORITIES: Record<ClaimUrgence, string> = { 'Normal': 'Normal', 'Important': 'Important', 'Critique': 'Critique' }
+const CARRIERS = ['', 'UPS', 'FedEx', 'DHL Express', 'TNT', 'GLS', 'Chronopost', 'DPD', 'Geodis', 'Schenker', 'Colissimo', 'Weship', 'Autre']
+const CF_STATUTS = ['', 'À déclarer', 'Transmis Coste Fermon', 'En instruction', 'Expertise en cours', 'Accord assureur', 'Indemnisé', 'Refusé / Sans suite', 'Clôturé']
+const OPEN_STATUSES: ClaimStatus[] = [
+  'Nouveau', 'Documents en cours', 'Transmis Coste Fermon', 'En instruction', 'Expertise en cours', 'Accord assureur',
+]
 
 const eur = (n: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0)
 const daysOpen = (c: Claim) =>
@@ -75,6 +81,26 @@ const F = ({ label, children, full = false }: { label: string; children: React.R
 )
 
 /**
+ * Contacts du service litiges du transporteur, et surtout son délai
+ * maximum de recours : c'est lui qui commande la relance, et le chercher
+ * dans un autre fichier au moment d'ouvrir un dossier faisait perdre du
+ * temps. Données reprises de l'onglet « Transporteurs » du classeur.
+ */
+function CarrierInfo({ carrier, carriers }: { carrier: string; carriers: Carrier[] }) {
+  const t = carriers.find((c) => c.name === carrier)
+  if (!t || (!t.phone && !t.email && !t.delai_recours && !t.claim_url)) return null
+  return (
+    <div className="rounded-lg bg-aura-50 px-3 py-2 text-xs text-aura-800 flex flex-wrap items-center gap-x-4 gap-y-1">
+      <span className="font-bold">{t.name}</span>
+      {t.delai_recours && <span>⏱ Recours : <b>{t.delai_recours}</b></span>}
+      {t.phone && <span>☎ {t.phone}</span>}
+      {t.email && <a href={`mailto:${t.email}`} className="underline hover:text-accent-500">{t.email}</a>}
+      {t.claim_url && <a href={t.claim_url} target="_blank" rel="noreferrer" className="underline hover:text-accent-500">Réclamation ↗</a>}
+    </div>
+  )
+}
+
+/**
  * Formulaire commun (création et fiche) : toutes les sections du suivi PA.
  *
  * Défini au premier niveau du module, et NON à l'intérieur de ClaimPage :
@@ -97,12 +123,12 @@ function ClaimForm({ c, onSubmit, submitLabel, profiles, defaultAssignee }: {
         <input name="title" className="input" required defaultValue={c.title ?? ''} placeholder="ex. 6 btl cassées — commande 6060 UPS" />
       </F>
       <F label="Type">
-        <select name="category" className="input" defaultValue={c.category ?? 'casse'}>
+        <select name="category" className="input" defaultValue={c.category ?? 'Casse partielle'}>
           {Object.entries(CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
       </F>
       <F label="Urgence">
-        <select name="priority" className="input" defaultValue={c.priority ?? 'moyenne'}>
+        <select name="priority" className="input" defaultValue={c.priority ?? 'Normal'}>
           {Object.entries(PRIORITIES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
       </F>
@@ -264,6 +290,7 @@ export default function ClaimPage() {
   const [assigneeFilter, setAssigneeFilter] = useState('')
 
   const { rows: claims, refresh, loading } = useTable('claims', undefined, { column: 'created_at', ascending: false })
+  const { rows: carriers } = useTable('carriers')
   const { rows: events, refresh: refreshEvents } = useTable('claim_events', undefined, { column: 'created_at', ascending: true })
   const { rows: profiles } = useTable('profiles', undefined, { column: 'full_name', ascending: true })
 
@@ -345,7 +372,7 @@ export default function ClaimPage() {
   function collectFields(fd: FormData) {
     return {
       category: fdStr(fd, 'category') as ClaimCategory,
-      priority: fdStr(fd, 'priority') as Priority,
+      priority: fdStr(fd, 'priority') as ClaimUrgence,
       title: fdStr(fd, 'title'),
       description: fdStr(fd, 'description'),
       client_nom: fdStr(fd, 'client_nom'),
@@ -395,7 +422,7 @@ export default function ClaimPage() {
         ...fields,
         ref: nextRef(),
         kind: 'sinistre',
-        status: 'nouveau',
+        status: 'Nouveau',
         created_by: profile?.id ?? null,
       })
       await addEvent(created.id, 'statut', 'Dossier ouvert')
@@ -423,7 +450,8 @@ export default function ClaimPage() {
 
   async function changeStatus(c: Claim, status: ClaimStatus) {
     try {
-      const closed = status === 'clos' || status === 'accepte' || status === 'refuse'
+      // Un dossier clôturé, indemnisé, refusé ou non assuré sort des dossiers ouverts.
+      const closed = !OPEN_STATUSES.includes(status)
       await update('claims', c.id, { status, closed_at: closed ? new Date().toISOString() : null })
       await addEvent(c.id, 'statut', `Statut : ${STATUSES[c.status].label} → ${STATUSES[status].label}`)
       if (c.assignee_id && c.assignee_id !== profile?.id) {
@@ -639,6 +667,8 @@ export default function ClaimPage() {
                 {Object.entries(STATUSES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </div>
+
+            <CarrierInfo carrier={detail.carrier} carriers={carriers} />
 
             <div>
               <div className="flex items-center justify-between mb-2">
