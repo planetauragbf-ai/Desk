@@ -533,7 +533,7 @@ export default function CalendarPage() {
           onClose={() => setEditCell(null)}
         >
           <p className="text-sm text-aura-700/80 mb-3">Choisissez ce que vous voulez marquer sur cette journée :</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
               className="rounded-lg border border-aura-100 px-3 py-2 text-sm font-semibold hover:border-accent-500 text-left"
               onClick={() => setCell(editCell.profileId, editCell.date, 'presence')}
@@ -570,7 +570,7 @@ export default function CalendarPage() {
                 </select>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label">Type *</label>
                 <select name="kind" className="input" required defaultValue="hsupp">
@@ -583,7 +583,7 @@ export default function CalendarPage() {
                 <input type="date" name="date" className="input" required defaultValue={new Date().toISOString().slice(0, 10)} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label">Heures</label>
                 <input type="number" name="hours" className="input" min={0} defaultValue={0} />
@@ -622,7 +622,7 @@ export default function CalendarPage() {
                 {Object.entries(TYPES).map(([k, t]) => <option key={k} value={k}>{t.label}</option>)}
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label">Du *</label>
                 <input type="date" name="start_date" className="input" required />

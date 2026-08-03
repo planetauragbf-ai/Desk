@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { list, type OrderBy } from '../lib/data'
+import { signalerErreur } from '../lib/erreurs'
 import type { TableName, TableRowMap } from '../lib/types'
+
+/** Une même erreur de lecture n'est signalée qu'une fois par session. */
+const dejaSignalees = new Set<string>()
 
 /** Charge une table avec rechargement manuel via `refresh()`. */
 export function useTable<K extends TableName>(
@@ -19,7 +23,15 @@ export function useTable<K extends TableName>(
       .then((r) => {
         if (!cancelled) setRows(r)
       })
-      .catch((e) => console.error(`Chargement ${table} :`, e))
+      .catch((e) => {
+        // Une lecture qui échoue laissait la liste vide, sans un mot :
+        // impossible de distinguer « rien à afficher » de « ça ne marche
+        // pas ». On le dit, une seule fois par type d'erreur.
+        const cle = `${table}:${e instanceof Error ? e.message : String(e)}`
+        if (dejaSignalees.has(cle)) return
+        dejaSignalees.add(cle)
+        signalerErreur(e, `Chargement (${table})`)
+      })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })

@@ -266,7 +266,7 @@ function CreateEmployeeModal({ instances, onClose, onCreated }: {
           <label className="label">Email *</label>
           <input type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="emma@planet-aura.com" />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="label">Rôle</label>
             <select className="input" value={role} onChange={(e) => setRole(e.target.value as Profile['role'])}>
@@ -536,7 +536,7 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
   return (
     <Modal title={`Accès de ${user.full_name}`} onClose={onClose}>
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="label">Rôle</label>
             <select className="input" value={role} onChange={(e) => setRole(e.target.value as Profile['role'])} disabled={isSelf}>
@@ -571,7 +571,7 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
                       {m.label}
                     </label>
                   ))}
-                  <p className="col-span-2 text-[11px] text-aura-700/60">Le tableau de bord est toujours accessible.</p>
+                  <p className="sm:col-span-2 text-[11px] text-aura-700/60">Le tableau de bord est toujours accessible.</p>
                 </div>
               )}
             </div>
@@ -671,7 +671,7 @@ function ManageAccessModal({ user, isSelf, instances, objectives, grantedIds, me
           </p>
         )}
 
-        <div className="grid grid-cols-2 gap-3 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={isCompta} onChange={(e) => setIsCompta(e.target.checked)} />
             Service compta (valide les congés après l'admin)

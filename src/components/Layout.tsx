@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useUnread } from '../hooks/useUnread'
+import { useUnread } from '../context/UnreadContext'
 import { totalUnread } from '../lib/chat'
 import { demoMode } from '../lib/data'
 import { canAccessModule, type ModuleKey } from '../lib/permissions'
@@ -9,6 +9,7 @@ import { useBranding } from '../context/BrandingContext'
 import type { Profile } from '../lib/types'
 import { Avatar } from './ui'
 import ChatToasts from './ChatToasts'
+import ErrorBoundary from './ErrorBoundary'
 import NotificationsBell from './NotificationsBell'
 
 interface NavItem {
@@ -268,6 +269,8 @@ export default function Layout() {
   const { pathname, search } = useLocation()
   const [collapsed, setCollapsed] = usePersistedBool('desk-nav-fermee', false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const menuRef = useRef<HTMLElement>(null)
+  const menuScroll = useRef(0)
 
   // À chaque navigation : retour en haut de page, et fermeture du menu mobile.
   useEffect(() => {
@@ -280,6 +283,8 @@ export default function Layout() {
   // bloqué — et la fermeture rendait la position de lecture aléatoire.
   useEffect(() => {
     if (!mobileOpen) return
+    // Réouverture : on retrouve la liste là où on l'avait laissée.
+    if (menuRef.current) menuRef.current.scrollTop = menuScroll.current
     const precedent = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const fermer = (e: KeyboardEvent) => {
@@ -297,7 +302,7 @@ export default function Layout() {
   // Pastille « Chat interne » : total des messages non lus, rafraîchi en
   // temps réel et à chaque changement de page (une conversation ouverte
   // remet son compteur à zéro).
-  const nonLus = totalUnread(useUnread(profile?.id, pathname + search))
+  const nonLus = totalUnread(useUnread().unread)
   const deskItems = visible(DESK_NAV).map((i) => (i.to === '/chat' ? { ...i, badge: nonLus } : i))
   const projectItems = visible(PROJECTS_NAV)
   const dashItems = visible(DASH_NAV)
@@ -371,13 +376,25 @@ export default function Layout() {
           désormais toute la place, son propre défilement, et l'en-tête et
           le pied restent visibles. */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex flex-col bg-white">
+        <div
+          className="md:hidden fixed inset-0 z-50 flex flex-col bg-white"
+          style={{ animation: 'desk-slide-in 180ms ease-out' }}
+        >
           <div className="flex items-center gap-3 px-4 py-2.5 border-b border-aura-100 shrink-0">
             <img src={logos.desk} alt="" className="h-8 w-8 rounded-full border border-aura-100 bg-white p-0.5 object-contain" />
             <div className="font-extrabold text-aura-950 flex-1">Planet’Desk</div>
             <button onClick={() => setMobileOpen(false)} className="text-2xl text-aura-800 px-1" aria-label="Fermer">✕</button>
           </div>
-          <nav className="flex-1 overflow-y-auto overscroll-contain p-3 space-y-1">
+          {/* La position dans la liste est conservée d'une ouverture à
+              l'autre : après un appui sur une entrée du bas, le menu se
+              rouvrait tout en haut et il fallait redescendre à chaque fois. */}
+          <nav
+            ref={menuRef}
+            onScroll={(e) => {
+              menuScroll.current = e.currentTarget.scrollTop
+            }}
+            className="flex-1 overflow-y-auto overscroll-contain p-3 space-y-1"
+          >
             {navBody(false, () => setMobileOpen(false))}
           </nav>
           {profile && (
@@ -447,7 +464,9 @@ export default function Layout() {
           </div>
         )}
         <main className={fullBleed ? '' : 'p-4 md:p-6 max-w-6xl mx-auto'}>
-          <Outlet />
+          <ErrorBoundary resetKey={pathname + search}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
 

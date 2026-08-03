@@ -32,3 +32,18 @@ body {
     @apply px-3 py-2.5 text-sm border-t border-aura-100;
   }
 }
+
+/* Ouverture du menu téléphone : glissement depuis la gauche plutôt qu'une
+   apparition brutale. Neutralisé si la personne a demandé à son système de
+   réduire les animations. */
+@keyframes desk-slide-in {
+  from { transform: translateX(-100%); opacity: 0.6; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes desk-slide-in {
+    from { opacity: 1; }
+    to   { opacity: 1; }
+  }
+}

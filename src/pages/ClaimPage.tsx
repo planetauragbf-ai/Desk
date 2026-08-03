@@ -61,14 +61,14 @@ async function uploadClaimFile(file: File): Promise<{ url: string; name: string 
 
 function Section({ title }: { title: string }) {
   return (
-    <div className="col-span-2 text-[10px] font-extrabold uppercase tracking-widest text-accent-500 border-b-2 border-accent-500/40 pb-1 mt-2">
+    <div className="sm:col-span-2 text-[10px] font-extrabold uppercase tracking-widest text-accent-500 border-b-2 border-accent-500/40 pb-1 mt-2">
       {title}
     </div>
   )
 }
 
 const F = ({ label, children, full = false }: { label: string; children: React.ReactNode; full?: boolean }) => (
-  <div className={full ? 'col-span-2' : ''}>
+  <div className={full ? 'sm:col-span-2' : ''}>
     <label className="label">{label}</label>
     {children}
   </div>
@@ -91,7 +91,7 @@ function ClaimForm({ c, onSubmit, submitLabel, profiles, defaultAssignee }: {
   defaultAssignee: string
 }) {
   return (
-    <form onSubmit={onSubmit} className="grid grid-cols-2 gap-3">
+    <form onSubmit={onSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <Section title="Identification" />
       <F label="Titre du dossier *" full>
         <input name="title" className="input" required defaultValue={c.title ?? ''} placeholder="ex. 6 btl cassées — commande 6060 UPS" />
@@ -229,7 +229,7 @@ function ClaimForm({ c, onSubmit, submitLabel, profiles, defaultAssignee }: {
       <F label="Date versement">
         <input type="date" name="date_versement" className="input" defaultValue={c.date_versement ?? ''} />
       </F>
-      <div className="col-span-2 text-xs text-aura-700/80">
+      <div className="sm:col-span-2 text-xs text-aura-700/80">
         Reste à charge PA : <b>{eur((c.montant_estime || 0) - (c.montant_recupere || 0))}</b> (préjudice − versé, recalculé après enregistrement)
       </div>
 
@@ -244,7 +244,7 @@ function ClaimForm({ c, onSubmit, submitLabel, profiles, defaultAssignee }: {
         <textarea name="notes" className="input" rows={2} defaultValue={c.notes ?? ''} />
       </F>
 
-      <div className="col-span-2 flex justify-end gap-2 pt-1">
+      <div className="sm:col-span-2 flex justify-end gap-2 pt-1">
         <button type="submit" className="btn-primary">{submitLabel}</button>
       </div>
     </form>

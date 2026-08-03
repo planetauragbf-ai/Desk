@@ -135,7 +135,7 @@ export default function Objectives() {
               <label className="label">Attendu / livrable</label>
               <textarea name="expected_result" className="input" rows={3} placeholder="Quel résultat concret attend-on ?" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label">Objectif parent</label>
                 <select name="parent_id" className="input" defaultValue="">

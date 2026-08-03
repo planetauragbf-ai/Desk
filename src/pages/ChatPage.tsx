@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent 
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useTable } from '../hooks/useTable'
-import { useUnread } from '../hooks/useUnread'
+import { useUnread } from '../context/UnreadContext'
 import { markRead } from '../lib/chat'
 import { insert, list, remove, update } from '../lib/data'
 import { essayer, messageErreur } from '../lib/erreurs'
@@ -125,16 +125,14 @@ export default function ChatPage() {
     if (el) el.scrollTop = el.scrollHeight
   }, [messages.length, channelId])
 
-  // Pastilles « non lus » par conversation. La clé inclut le canal ouvert
-  // et le nombre de messages affichés : le compteur retombe à zéro dès que
-  // la conversation est lue, et remonte dès qu'un collègue répond.
-  const unread = useUnread(profile?.id, `${channelId ?? ''}-${messages.length}`)
+  // Pastilles « non lus » par conversation, partagées avec le menu.
+  const { unread, refresh: refreshUnread } = useUnread()
 
   // Ouvrir une conversation la marque comme lue (côté base) et solde ses
   // notifications.
   useEffect(() => {
     if (!channelId || !profile) return
-    markRead(channelId)
+    markRead(channelId).then(refreshUnread)
     list('notifications', { user_id: profile.id })
       .then((rows) =>
         Promise.all(
