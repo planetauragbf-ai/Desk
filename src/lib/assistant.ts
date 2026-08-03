@@ -372,7 +372,8 @@ export function answer(question: string, d: AssistantData): AssistantAnswer {
   if (q.includes('sinistre') || q.includes('litige') || q.includes('casse') || q.includes('reclamation')) {
     const results = search(d, question, ['sinistre'])
     if (results.length) return { text: 'Dossiers correspondants :', results }
-    const opens = d.claims.filter((c) => !['clos', 'accepte', 'refuse'].includes(c.status))
+    const clos = ['Clôturé', 'Indemnisé', 'Refusé / Sans suite', 'Non - Assuré']
+    const opens = d.claims.filter((c) => !clos.includes(c.status))
     return {
       text: opens.length ? `${opens.length} ${plural(opens.length, 'dossier')} ouvert(s) :` : 'Aucun dossier sinistre ouvert.',
       results: opens.slice(0, 8).map((c) => ({ kind: 'sinistre' as const, title: `${c.ref} — ${c.title}`, subtitle: c.status, to: '/claim' })),

@@ -164,6 +164,9 @@ function seed(): Db {
     time_entries: [],
     claims: [],
     claim_events: [],
+    // Annuaire des transporteurs : en mode démo, les contacts du service
+    // litiges viennent de la base ; ici la liste reste vide.
+    carriers: [],
     poll_votes: [],
     leaves: [
       { id: uid(), profile_id: users.lea, type: 'conge', start_date: day(10), end_date: day(14), reason: 'Congés été', status: 'validee', admin_by: users.admin, admin_at: iso(-2), compta_by: users.admin, compta_at: iso(-1), refusal_reason: '', created_at: iso(-4) },

@@ -32,11 +32,12 @@ export async function loadShip24Key() {
 export const getShip24Key = () => ship24Key;
 
 // ─── Création d'un dossier Planet'Claim depuis une expédition ───
+// Vocabulaire du classeur de suivi PA (onglet « Listes »).
 const CATEGORY_BY_STATUS = {
-  sinistre: "casse",
-  exception: "autre",
-  tentative: "erreur_livraison",
-  annule: "autre",
+  sinistre: "Casse partielle",
+  exception: "Autre",
+  tentative: "Refus livraison",
+  annule: "Autre",
 };
 
 export async function createClaimFromShipping(s) {
@@ -47,9 +48,9 @@ export async function createClaimFromShipping(s) {
   const created = await insert("claims", {
     ref,
     kind: "sinistre",
-    category: CATEGORY_BY_STATUS[s.status] || "casse",
-    status: "nouveau",
-    priority: "haute",
+    category: CATEGORY_BY_STATUS[s.status] || "Casse partielle",
+    status: "Nouveau",
+    priority: "Important",
     title: `Expédition ${s.id} — ${dest.nom || "destinataire"}`,
     description: s.note || "",
     client_nom: [dest.prenom, dest.nom].filter(Boolean).join(" "),

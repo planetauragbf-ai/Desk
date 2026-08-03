@@ -207,9 +207,30 @@ export interface Channel {
   created_at: string
 }
 
+/** Transporteur : contacts du service litiges et délai de recours */
+export interface Carrier {
+  name: string
+  phone: string
+  email: string
+  address: string
+  tracking_url: string
+  claim_url: string
+  delai_recours: string
+  notes: string
+}
+
 export type ClaimKind = 'sinistre' | 'litige'
-export type ClaimCategory = 'casse' | 'perte' | 'vol' | 'retard' | 'temperature' | 'erreur_livraison' | 'facturation' | 'autre'
-export type ClaimStatus = 'nouveau' | 'en_cours' | 'attente_transporteur' | 'attente_assurance' | 'attente_client' | 'accepte' | 'refuse' | 'clos'
+
+// Vocabulaire repris tel quel du classeur de suivi Planet Aura
+// (onglet « Listes ») : c'est lui qui fait foi, pas des codes internes.
+export type ClaimCategory =
+  | 'Casse partielle' | 'Casse totale' | 'Coulage / fuite' | 'Perte' | 'Vol'
+  | 'Refus livraison' | 'Altération thermique' | 'Étiquette tachée' | 'Autre'
+export type ClaimStatus =
+  | 'Nouveau' | 'Documents en cours' | 'Transmis Coste Fermon' | 'En instruction'
+  | 'Expertise en cours' | 'Accord assureur' | 'Indemnisé' | 'Clôturé'
+  | 'Refusé / Sans suite' | 'Non - Assuré'
+export type ClaimUrgence = 'Normal' | 'Important' | 'Critique'
 
 /** Dossier de sinistre (Planet'Claim), aligné sur le suivi PA */
 export interface Claim {
@@ -218,7 +239,7 @@ export interface Claim {
   kind: ClaimKind
   category: ClaimCategory
   status: ClaimStatus
-  priority: Priority
+  priority: ClaimUrgence
   title: string
   description: string
   // Client
@@ -403,6 +424,7 @@ export interface TableRowMap {
   time_entries: TimeEntry
   claims: Claim
   claim_events: ClaimEvent
+  carriers: Carrier
 }
 
 export type TableName = keyof TableRowMap

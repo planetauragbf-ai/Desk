@@ -10,7 +10,11 @@ import type { Profile } from './types'
 
 let alreadyRan = false
 
-const OPEN_STATUSES = ['nouveau', 'en_cours', 'attente_transporteur', 'attente_assurance', 'attente_client']
+// Statuts « dossier encore ouvert », vocabulaire du classeur de suivi PA.
+const OPEN_STATUSES = [
+  'Nouveau', 'Documents en cours', 'Transmis Coste Fermon',
+  'En instruction', 'Expertise en cours', 'Accord assureur',
+]
 
 export async function runClaimReminders(profile: Profile | null): Promise<void> {
   if (!profile || alreadyRan) return
