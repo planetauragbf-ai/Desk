@@ -504,7 +504,7 @@ function PlanTab({ objectiveId, children, objectives, allTasks, indicators, dire
               <label className="label">Libellé *</label>
               <input name="title" className="input" required />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label">Échéance</label>
                 <input type="date" name="due_date" className="input" />
@@ -758,7 +758,7 @@ function TaskEditModal({ objectiveId, task, profiles, onClose, onSaved }: {
           <label className="label">Description</label>
           <textarea name="description" className="input" rows={3} defaultValue={task?.description ?? ''} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="label">Échéance</label>
             <input type="date" name="due_date" className="input" defaultValue={task?.due_date ?? ''} />
@@ -999,7 +999,7 @@ function DocumentsTab({ objectiveId, docs, authorId, refresh }: {
               <label className="label">Nom *</label>
               <input name="name" className="input" required placeholder="Ex. : Cahier des charges v2.pdf" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label">Dossier</label>
                 <select name="folder" className="input" defaultValue="Général">
@@ -1247,7 +1247,7 @@ function IndicatorsTab({ objectiveId, indicators, refresh }: {
               <label className="label">Nom *</label>
               <input name="name" className="input" required placeholder="Ex. : Participants inscrits" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label">Cible *</label>
                 <input type="number" name="target_value" className="input" required />

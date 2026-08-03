@@ -5,6 +5,7 @@ import App from './App'
 import ErrorToasts from './components/ErrorToasts'
 import { AuthProvider } from './context/AuthContext'
 import { BrandingProvider } from './context/BrandingContext'
+import { UnreadProvider } from './context/UnreadContext'
 import { installerFiletErreurs } from './lib/erreurs'
 import './index.css'
 
@@ -15,7 +16,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <AuthProvider>
         <BrandingProvider>
-          <App />
+          <UnreadProvider>
+            <App />
+          </UnreadProvider>
           <ErrorToasts />
         </BrandingProvider>
       </AuthProvider>

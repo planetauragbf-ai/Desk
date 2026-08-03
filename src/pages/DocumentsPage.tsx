@@ -226,7 +226,7 @@ export default function DocumentsPage() {
               <label className="label">Nom *</label>
               <input name="name" className="input" required defaultValue={editing?.name ?? ''} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label">Dossier</label>
                 <select name="folder" className="input" defaultValue={editing?.folder ?? folder ?? 'Général'}>

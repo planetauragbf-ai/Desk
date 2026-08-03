@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { initials } from '../lib/format'
 import type { Priority, TaskStatus, ObjectiveStatus, DecisionStatus } from '../lib/types'
 import {
@@ -142,15 +142,39 @@ export function Modal({ title, onClose, children, wide = false }: {
   children: ReactNode
   wide?: boolean
 }) {
+  // Échap ferme la fenêtre, et la page derrière ne défile plus : sur
+  // téléphone, faire défiler un long formulaire emportait la page au lieu
+  // du formulaire.
+  useEffect(() => {
+    const precedent = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const clavier = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', clavier)
+    return () => {
+      document.body.style.overflow = precedent
+      window.removeEventListener('keydown', clavier)
+    }
+  }, [onClose])
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-aura-950/50 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-aura-950/50 p-0 sm:p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      {/* Sur téléphone la fenêtre occupe le bas de l'écran, au plus près
+          du pouce ; centrée et arrondie dès la tablette. */}
       <div
-        className={`w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl`}
+        className={`w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'} max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl sm:rounded-xl bg-white p-4 sm:p-6 shadow-xl`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 sticky -top-4 sm:-top-6 bg-white pt-1 pb-2 -mt-1 z-10">
           <h3 className="text-base font-bold">{title}</h3>
-          <button onClick={onClose} className="text-aura-700 hover:text-aura-900 text-xl leading-none" aria-label="Fermer">×</button>
+          <button onClick={onClose} className="text-aura-700 hover:text-aura-900 text-2xl leading-none px-2" aria-label="Fermer">×</button>
         </div>
         {children}
       </div>
