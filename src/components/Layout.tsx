@@ -313,6 +313,10 @@ export default function Layout() {
   const claimItems = visible(CLAIM_NAV)
   // Planet'Stock et Planet'Dash embarquent leur propre fond : pleine largeur.
   const fullBleed = pathname.startsWith('/stock') || pathname.startsWith('/dash')
+  // Pages à tableau large : elles occupent toute la largeur de l'écran
+  // plutôt que la colonne de lecture. Sur un grand écran, le tableau des
+  // sinistres compte trop de colonnes pour tenir dans 1 152 px.
+  const pleineLargeur = pathname.startsWith('/claim') || pathname.startsWith('/journal')
 
   // `onNavigate` : sur téléphone, un appui sur un lien ferme le menu — y
   // compris quand il pointe vers la page déjà ouverte, où l'URL ne change
@@ -465,7 +469,7 @@ export default function Layout() {
             Mode démo — données stockées dans ce navigateur. Configurez Supabase (voir README) pour un espace partagé.
           </div>
         )}
-        <main className={fullBleed ? '' : 'p-4 md:p-6 max-w-6xl mx-auto'}>
+        <main className={fullBleed ? '' : `p-4 md:p-6 ${pleineLargeur ? '' : 'max-w-6xl mx-auto'}`}>
           <ErrorBoundary resetKey={pathname + search}>
             <Outlet />
           </ErrorBoundary>

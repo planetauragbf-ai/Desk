@@ -169,7 +169,7 @@ export function Modal({ title, onClose, children, wide = false }: {
       {/* Sur téléphone la fenêtre occupe le bas de l'écran, au plus près
           du pouce ; centrée et arrondie dès la tablette. */}
       <div
-        className={`w-full ${wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'} max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl sm:rounded-xl bg-white p-4 sm:p-6 shadow-xl`}
+        className={`w-full ${wide ? 'sm:max-w-3xl xl:max-w-5xl' : 'sm:max-w-lg'} max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-2xl sm:rounded-xl bg-white p-4 sm:p-6 shadow-xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4 sticky -top-4 sm:-top-6 bg-white pt-1 pb-2 -mt-1 z-10">

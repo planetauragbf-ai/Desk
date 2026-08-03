@@ -631,7 +631,7 @@ export default function ClaimPage() {
                     <td className="table-cell text-right text-xs">{daysOpen(c)} j</td>
                     <td className="table-cell text-right text-xs font-semibold">{c.montant_estime ? eur(c.montant_estime) : '—'}</td>
                     <td className="table-cell text-right text-xs font-semibold text-emerald-700">{c.montant_recupere ? eur(c.montant_recupere) : '—'}</td>
-                    <td className={`table-cell text-xs max-w-44 truncate ${c.action_echeance && c.action_echeance <= soon && OPEN_STATUSES.includes(c.status) ? 'text-coral-600 font-bold' : ''}`}>
+                    <td className={`table-cell text-xs max-w-44 xl:max-w-96 truncate ${c.action_echeance && c.action_echeance <= soon && OPEN_STATUSES.includes(c.status) ? 'text-coral-600 font-bold' : ''}`}>
                       {c.prochaine_action || '—'}{c.action_echeance && ` (${formatDate(c.action_echeance)})`}
                     </td>
                     <td className="table-cell text-xs">{profileName(profiles, c.assignee_id)}</td>
