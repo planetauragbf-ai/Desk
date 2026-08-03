@@ -11,6 +11,7 @@ import { Avatar } from './ui'
 import ChatToasts from './ChatToasts'
 import ErrorBoundary from './ErrorBoundary'
 import NotificationsBell from './NotificationsBell'
+import SchemaBanner from './SchemaBanner'
 
 interface NavItem {
   to: string
@@ -458,6 +459,7 @@ export default function Layout() {
       </aside>
 
       <div className="flex-1 min-w-0">
+        <SchemaBanner />
         {demoMode && (
           <div className="bg-amber-100 text-amber-900 text-xs px-6 py-1.5 text-center font-medium">
             Mode démo — données stockées dans ce navigateur. Configurez Supabase (voir README) pour un espace partagé.

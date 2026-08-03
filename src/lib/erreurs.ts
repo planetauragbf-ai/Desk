@@ -46,12 +46,33 @@ const REGLES: { test: RegExp; message: (m: RegExpMatchArray) => string }[] = [
     message: () => "Une valeur saisie n'est pas acceptée.",
   },
   {
-    test: /infinite recursion detected in policy/i,
-    message: () => 'Configuration de la base incomplète : exécutez la dernière migration SQL.',
+    test: /infinite recursion detected in policy for relation "([^"]+)"/i,
+    message: (m) => `Politiques de sécurité en boucle sur « ${m[1]} » : exécutez rattrapage.sql.`,
+  },
+  // Ces règles nomment ce qui manque : sans le nom, impossible de savoir
+  // quelle migration exécuter. Elles vont du plus précis au plus général —
+  // « column "x" of relation "y" » contient « relation "y" », donc la règle
+  // « colonne » doit passer en premier.
+  {
+    test: /column "([^"]+)" of relation "([^"]+)" does not exist/i,
+    message: (m) => `La colonne « ${m[1]} » manque à la table « ${m[2]} » : exécutez rattrapage.sql.`,
   },
   {
-    test: /relation "[^"]+" does not exist|column "[^"]+" .* does not exist/i,
-    message: () => 'Configuration de la base incomplète : exécutez les dernières migrations SQL.',
+    // PostgREST : colonne absente de son cache de schéma.
+    test: /Could not find the '([^']+)' column of '([^']+)'/i,
+    message: (m) => `La colonne « ${m[1]} » manque à la table « ${m[2]} » : exécutez rattrapage.sql.`,
+  },
+  {
+    test: /column "([^"]+)" does not exist/i,
+    message: (m) => `La colonne « ${m[1]} » n'existe pas encore dans la base : exécutez rattrapage.sql.`,
+  },
+  {
+    test: /relation "([^"]+)" does not exist/i,
+    message: (m) => `La table « ${m[1].replace(/^public\./, '')} » n'existe pas encore dans la base : exécutez rattrapage.sql.`,
+  },
+  {
+    test: /Could not find the (?:function|table) ([\w.]+)/i,
+    message: (m) => `« ${m[1].replace(/^public\./, '')} » n'existe pas encore dans la base : exécutez rattrapage.sql.`,
   },
   {
     test: /JWT expired|invalid claim/i,
@@ -78,6 +99,9 @@ export interface ErreurAffichee {
   id: number
   contexte?: string
   message: string
+  /** Message d'origine, consultable : la traduction seule ne suffit pas
+   *  toujours pour comprendre ce qui s'est passé. */
+  detail?: string
 }
 
 type Abonne = (e: ErreurAffichee) => void
@@ -99,8 +123,14 @@ export function surErreur(fn: Abonne): () => void {
  */
 export function signalerErreur(e: unknown, contexte?: string) {
   const message = messageErreur(e)
+  const brut = e instanceof Error ? e.message : String(e ?? '')
   console.error(contexte ?? 'Erreur', e)
-  const erreur: ErreurAffichee = { id: ++compteur, contexte, message }
+  const erreur: ErreurAffichee = {
+    id: ++compteur,
+    contexte,
+    message,
+    detail: brut && brut !== message ? brut : undefined,
+  }
   if (abonnes.size === 0) {
     alert(contexte ? `${contexte} : ${message}` : message)
     return

@@ -7,7 +7,7 @@ cd "$(dirname "$0")/../.."
 
 # Migrations qui manquent à la base déjà en service. Ajoutez ici toute
 # nouvelle migration, et relancez ce script.
-RATTRAPAGE=(0009_dossiers 0017_securite 0018_performance 0019_chat_recursion 0020_chat_lecture 0021_claim_vocabulaire)
+RATTRAPAGE=(0009_dossiers 0017_securite 0018_performance 0019_chat_recursion 0020_chat_lecture 0021_claim_vocabulaire 0022_profils_recursion)
 
 entete() {
   printf '\n\n-- ############################################################\n'
@@ -53,6 +53,7 @@ EOF
 --   0019  correctif : récursion des politiques du chat
 --   0020  chat : compteurs de messages non lus
 --   0021  Planet'Claim : vocabulaire du classeur + transporteurs
+--   0022  correctif : récursion des politiques de profiles
 --
 -- À exécuter EN UNE SEULE FOIS : Supabase → SQL Editor → New query
 -- → coller tout → Run. Les migrations sont reprises ci-dessous dans
