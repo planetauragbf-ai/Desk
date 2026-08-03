@@ -32,6 +32,16 @@ export default function ErrorToasts() {
           <div className="min-w-0 flex-1">
             {e.contexte && <div className="text-sm font-bold text-aura-950">{e.contexte}</div>}
             <div className="text-xs text-aura-700/90 break-words">{e.message}</div>
+            {e.detail && (
+              <details className="mt-1">
+                <summary className="text-[11px] text-aura-700/60 cursor-pointer hover:text-aura-900">
+                  Détail technique
+                </summary>
+                <p className="mt-1 rounded bg-aura-50 p-2 text-[11px] font-mono text-aura-700 break-words select-all">
+                  {e.detail}
+                </p>
+              </details>
+            )}
           </div>
           <button
             className="text-aura-700/50 hover:text-aura-900 text-sm leading-none shrink-0"
