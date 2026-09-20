@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, Component } from "react";
-import { loadState, saveState, uploadPhoto, deletePhoto, subscribeSync, fetchCloudState, ensureCloudAuth, cloudSignOut } from "./storage.js";
+import { loadState, saveState, uploadPhoto, deletePhoto, subscribeSync, fetchCloudState, ensureCloudAuth, cloudSignOut, changeCloudPassword } from "./storage.js";
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
@@ -1812,12 +1812,12 @@ return <div>
 // ═══ GESTION UTILISATEURS (Admin) ═══
 function GestionUsers({data:d,setData:sD,currentUser:cu}){
 const[sh,sSh]=useState(false);const[ed,sEd]=useState(null);
-const[f,sF]=useState({nom:"",email:"",mdp:"",role:"logisticien",adherentId:"",permissions:{entrees:true,sorties:true,references:true,espaces:true,facturation:false,compta:false,grille:false}});
+const[f,sF]=useState({nom:"",email:"",mdp:"",role:"logisticien",adherentId:"",permissions:{entrees:true,sorties:true,references:true,espaces:true,facturation:false,compta:false,grille:false,journal:false}});
 const users=d.users||[];
-const open=u=>{sEd(u);sF(u?{nom:u.nom,email:u.email,mdp:u.mdp,role:u.role,adherentId:u.adherentId||"",permissions:u.permissions||{entrees:true,sorties:true,references:true,espaces:true,facturation:false,compta:false,grille:false}}:{nom:"",email:"",mdp:"",role:"logisticien",adherentId:"",permissions:{entrees:true,sorties:true,references:true,espaces:true,facturation:false,compta:false,grille:false}});sSh(true);};
+const open=u=>{sEd(u);sF(u?{nom:u.nom,email:u.email,mdp:u.mdp,role:u.role,adherentId:u.adherentId||"",permissions:u.permissions||{entrees:true,sorties:true,references:true,espaces:true,facturation:false,compta:false,grille:false,journal:false}}:{nom:"",email:"",mdp:"",role:"logisticien",adherentId:"",permissions:{entrees:true,sorties:true,references:true,espaces:true,facturation:false,compta:false,grille:false,journal:false}});sSh(true);};
 const doSave=()=>{if(!f.nom||!f.email||!f.mdp)return;const nd={...d};if(ed){nd.users=(nd.users||[]).map(u=>u.id===ed.id?{...u,...f}:u);}else{nd.users=[...(nd.users||[]),{id:"U"+Date.now(),...f,creePar:cu.nom,creeLe:new Date().toISOString()}];}nd.auditLog=[...(nd.auditLog||[]),{date:new Date().toISOString(),user:cu.nom,role:cu.role,module:"Utilisateurs",action:`${ed?"Modifié":"Créé"} utilisateur ${f.nom} (${f.role})`}];sD(nd);sSh(false);};
 const delUser=u=>{const nd={...d,users:(d.users||[]).filter(x=>x.id!==u.id),auditLog:[...(d.auditLog||[]),{date:new Date().toISOString(),user:cu.nom,role:cu.role,module:"Utilisateurs",action:`Supprimé utilisateur ${u.nom}`}]};sD(nd);};
-const permLabels={entrees:"Entrées",sorties:"Sorties",references:"Références",espaces:"Espaces",facturation:"Relevés",compta:"Compta Matière",grille:"Tarifs"};
+const permLabels={entrees:"Entrées",sorties:"Sorties",references:"Références",espaces:"Espaces",facturation:"Relevés",compta:"Compta Matière",grille:"Tarifs",journal:"Journal"};
 return <div>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,marginBottom:14}}><h3 style={{color:P.tx,margin:0}}>👥 Gestion Utilisateurs & Accès</h3><Btn onClick={()=>open(null)}>+ Utilisateur</Btn></div>
 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:10,marginBottom:14}}>
@@ -1914,14 +1914,20 @@ const doLogin=async()=>{
   // ouverte, on ne la remplace pas.
   let auth={ok:true};
   if(!skipAuth)auth=await ensureCloudAuth(e,mdp);
+  // Quand Supabase a validé le couple email + mot de passe, c'est LUI la
+  // vraie barrière : on identifie alors le compte par son email seul. Le
+  // mot de passe mémorisé dans l'état (mdp) n'est plus comparé — sans quoi
+  // changer son mot de passe empêcherait de se reconnecter. En mode local
+  // (sans Supabase), le mdp reste le seul contrôle.
+  const cloudOk=auth.ok&&(auth.mode==="signin"||auth.mode==="signup");
   // Recharger l'état depuis le cloud (nécessaire quand la base est verrouillée aux utilisateurs authentifiés)
   let dd=d;
   try{const fresh=await onRefresh?.();if(fresh)dd=fresh;}catch{}
   // Check admin/logisticien users
-  const user=(dd.users||[]).find(u=>u.email.toLowerCase()===e&&u.mdp===mdp);
+  const user=(dd.users||[]).find(u=>u.email.toLowerCase()===e&&(cloudOk||u.mdp===mdp));
   if(user){setBusy(false);return onLogin({...user,type:"internal"});}
   // Check adherent
-  const adh=dd.adherents.find(a=>a.email?.toLowerCase()===e&&a.mdp===mdp&&a.stockageActif);
+  const adh=dd.adherents.find(a=>a.email?.toLowerCase()===e&&(cloudOk||a.mdp===mdp)&&a.stockageActif);
   if(adh){setBusy(false);return onLogin({id:adh.id,nom:adh.name,email:adh.email,role:"adherent",adherentId:adh.id,type:"adherent"});}
   // L'échec d'authentification cloud porte parfois la vraie explication
   // (confirmation d'email en attente…) : on l'affiche plutôt que le
@@ -1942,6 +1948,28 @@ return <div className="pa-root" style={{fontFamily:FN,background:P.bg,minHeight:
 </div>
 </div>
 </div>;}
+
+// ═══ CHANGEMENT DE MOT DE PASSE (par chacun, pour son propre compte) ═══
+function ChangePassword({onClose,onSave}){
+const[p1,sP1]=useState("");const[p2,sP2]=useState("");const[busy,sBusy]=useState(false);const[err,sErr]=useState("");const[ok,sOk]=useState(false);
+const submit=async()=>{
+  if(p1.length<6){sErr("6 caractères minimum");return;}
+  if(p1!==p2){sErr("Les deux mots de passe ne correspondent pas");return;}
+  sErr("");sBusy(true);
+  try{await onSave(p1);sOk(true);setTimeout(onClose,1400);}
+  catch(e){sErr(String(e?.message||e));sBusy(false);}
+};
+return <Modal title="🔑 Modifier mon mot de passe" onClose={onClose}>
+<div style={{display:"grid",gap:10}}>
+{ok?<div style={{color:P.gn,fontWeight:600,textAlign:"center",padding:14}}>✅ Mot de passe modifié — il sera demandé à la prochaine connexion.</div>:<>
+<div style={{fontSize:12,color:P.tm}}>Choisissez un nouveau mot de passe pour votre compte (6 caractères minimum).</div>
+<Inp label="Nouveau mot de passe" type="password" value={p1} onChange={sP1} placeholder="••••••••"/>
+<Inp label="Confirmer le mot de passe" type="password" value={p2} onChange={sP2} placeholder="••••••••"/>
+{err&&<div style={{color:P.rd,fontSize:12,fontWeight:600}}>{err}</div>}
+<Btn onClick={submit} dis={busy}>{busy?"⏳ Enregistrement...":"Enregistrer"}</Btn>
+</>}
+</div>
+</Modal>;}
 
 // ═══ FICHE TECHNIQUE (ouverte via QR code : /stock/fiche/REFxxxx) ═══
 function FicheRef({data:d,refId,currentUser,onClose}){
@@ -2039,7 +2067,7 @@ export default function App({session,forcedTab,onTabChange}){const[d,sR]=useStat
 const[currentUser,setCurrentUser]=useState(()=>{try{const s=localStorage.getItem("pa-session");return s?JSON.parse(s):null;}catch{return null;}});
 // Route /stock/fiche/REFxxxx (arrivée via scan de QR code)
 const[ficheId,sFiche]=useState(()=>{try{const m=window.location.pathname.match(/\/stock\/fiche\/([A-Za-z0-9_-]+)/i);return m?decodeURIComponent(m[1]).toUpperCase():null;}catch{return null;}});
-const isMobile=useIsMobile();const[drawer,setDrawer]=useState(false);
+const isMobile=useIsMobile();const[drawer,setDrawer]=useState(false);const[pwOpen,setPwOpen]=useState(false);
 useEffect(()=>{ld().then(x=>{
 const raw=x||defaultState;
 const safe={...defaultState,...raw,
@@ -2072,7 +2100,7 @@ const allowedTabIds=useMemo(()=>{
   if(p.facturation)ids.push("facturation");
   if(p.compta)ids.push("compta");
   if(p.grille)ids.push("grille");
-  ids.push("journal");
+  if(p.journal)ids.push("journal");
   return ids;
 },[currentUser]);
 
@@ -2108,6 +2136,16 @@ const nd={...d,auditLog:[...(d.auditLog||[]),{date:new Date().toISOString(),user
 if(user.role==="adherent")sTab("adherent");else sTab("dashboard");};
 
 const handleLogout=()=>{if(currentUser&&d){const nd={...d,auditLog:[...(d.auditLog||[]),{date:new Date().toISOString(),user:currentUser.nom,role:currentUser.role,module:"Déconnexion",action:`Déconnexion ${currentUser.nom}`}]};sD(nd);}try{localStorage.removeItem("pa-session");}catch{}if(!session)cloudSignOut();setCurrentUser(null);sTab("dashboard");};
+
+// Chaque personne peut changer son propre mot de passe (site autonome).
+const changeOwnPassword=async(newPass)=>{
+  // 1. Identifiant d'authentification Supabase du compte connecté.
+  if(!session){const r=await changeCloudPassword(newPass);if(!r.ok)throw new Error(r.msg||"Échec de la mise à jour");}
+  // 2. Reflet dans l'état pour les comptes internes (écriture réservée aux
+  //    internes ; pour un adhérent, l'authentification suffit).
+  if(currentUser?.role!=="adherent"&&d){const em=(currentUser.email||"").toLowerCase();
+    sD({...d,users:(d.users||[]).map(u=>u.email?.toLowerCase()===em?{...u,mdp:newPass}:u),auditLog:[...(d.auditLog||[]),{date:new Date().toISOString(),user:currentUser.nom,role:currentUser.role,module:"Compte",action:"Mot de passe modifié"}]});}
+};
 
 
 // ─── MODE INTÉGRÉ (application interne Planet Aura) ───
@@ -2163,7 +2201,7 @@ if(perms.sorties)visibleTabs.push({id:"sorties",label:"Sorties",icon:"📤"});
 if(perms.grille)visibleTabs.push({id:"grille",label:"Tarifs",icon:"📋"});
 if(perms.facturation)visibleTabs.push({id:"facturation",label:"Relevés",icon:"🧾"});
 if(perms.compta)visibleTabs.push({id:"compta",label:"Compta Matière",icon:"⚖️"});
-visibleTabs.push({id:"journal",label:"Journal",icon:"📝"});
+if(perms.journal)visibleTabs.push({id:"journal",label:"Journal",icon:"📝"});
 }
 
 // For adherent, filter data to their own
@@ -2221,6 +2259,7 @@ const navContent=<>
 <div style={{fontSize:9,color:roleColors[currentUser.role],fontWeight:600}}>{roleLabels[currentUser.role]}</div>
 </div>
 </div>
+{!session&&<button onClick={()=>{setPwOpen(true);if(isMobile)setDrawer(false);}} style={{marginTop:8,width:"100%",background:P.bg,color:P.tx,border:`1px solid ${P.bd}`,borderRadius:6,padding:"9px 10px",minHeight:38,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:FN}}>🔑 Modifier mon mot de passe</button>}
 <button onClick={handleLogout} style={{marginTop:8,width:"100%",background:P.rds,color:P.rd,border:`1px solid ${P.rd}30`,borderRadius:6,padding:"9px 10px",minHeight:38,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:FN}}>Déconnexion</button>
 </div>}
 
@@ -2259,5 +2298,6 @@ return <div className="pa-root" style={{fontFamily:FN,background:P.bg,color:P.tx
 </>:
 <div style={{width:sb?220:56,background:P.sf,borderRight:`1px solid ${P.bd}`,transition:"width .2s",flexShrink:0,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"2px 0 8px #0001"}}>{navContent}</div>}
 <div className="pa-content" style={{flex:1,overflow:"auto",padding:isMobile?12:24}}><div className="pa-fade" key={tab} style={{maxWidth:1440,margin:"0 auto"}}><ErrorBoundary key={tab}>{R()}</ErrorBoundary></div></div>
+{pwOpen&&<ChangePassword onClose={()=>setPwOpen(false)} onSave={changeOwnPassword}/>}
 </div>;}
 

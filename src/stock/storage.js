@@ -168,6 +168,23 @@ export async function cloudSignOut() {
   } catch {}
 }
 
+// Changement du mot de passe du compte connecté (site autonome).
+// Met à jour l'identifiant d'authentification Supabase de l'utilisateur
+// courant. Sans cloud (mode local), rien à faire côté serveur.
+export async function changeCloudPassword(newPassword) {
+  if (!supabase) return { ok: true, mode: "local" };
+  try {
+    const { error } = await withTimeout(
+      supabase.auth.updateUser({ password: newPassword }),
+      8000
+    );
+    if (error) return { ok: false, msg: error.message };
+    return { ok: true, mode: "cloud" };
+  } catch (e) {
+    return { ok: false, msg: String(e?.message || e) };
+  }
+}
+
 // ─── PHOTOS (Supabase Storage, bucket "photos") ───
 // Compression côté client avant envoi : max 1280 px, JPEG ~82 %.
 async function compressImage(file, max = 1280, quality = 0.82) {
