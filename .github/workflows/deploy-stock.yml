@@ -28,11 +28,13 @@ jobs:
         run: npm run build:stock
         env:
           # Projet Supabase « Stockage » — URL du projet et clé PUBLIABLE
-          # (sb_publishable_… / anon). Ce sont des valeurs publiques par
-          # conception ; la clé secrète (service_role) n'a JAMAIS sa place ici.
-          # Vides → le site démarre en mode local (localStorage), sans cloud.
-          STOCK_SUPABASE_URL: ""
-          STOCK_SUPABASE_ANON_KEY: ""
+          # (sb_publishable_… / anon). Ces deux valeurs sont PUBLIQUES par
+          # conception : la clé publiable est incluse dans le code JavaScript
+          # envoyé à chaque visiteur, la protection venant des politiques RLS
+          # côté base, pas du secret de la clé. La clé SECRÈTE (service_role /
+          # sb_secret_…) n'a en revanche JAMAIS sa place ici.
+          STOCK_SUPABASE_URL: "https://gfablgawzfbbrrcdpelx.supabase.co"
+          STOCK_SUPABASE_ANON_KEY: "sb_publishable_p0IG4hDn1Iyvd0XxzDeq0g_vxErLEfY"
 
       - name: Page d'accueil du site autonome
         run: mv dist-stock/stock.html dist-stock/index.html
