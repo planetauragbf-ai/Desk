@@ -1944,11 +1944,15 @@ return <div style={{fontFamily:FN,background:P.bg,minHeight:"100vh",padding:14}}
 </div>;}
 
 // ═══ MAIN ═══
-const adminTabs=[{id:"dashboard",label:"Dashboard",icon:"📊"},{id:"adherents",label:"Adhérents",icon:"👥"},{id:"entrees",label:"Entrées",icon:"📥"},{id:"references",label:"Références",icon:"🍷"},{id:"sorties",label:"Sorties",icon:"📤"},{id:"espaces",label:"Espaces",icon:"🗄️"},{id:"facturation",label:"Relevés",icon:"🧾"},{id:"compta",label:"Compta Matière",icon:"⚖️"},{id:"grille",label:"Tarifs",icon:"📋"},{id:"journal",label:"Journal",icon:"📝"},{id:"users",label:"Utilisateurs",icon:"🔐"},{id:"reglages",label:"Réglages",icon:"⚙️"},{id:"adherent",label:"Espace Adh.",icon:"👤"}];
+// Ordre calqué sur le chemin de la marchandise, identique au menu de
+// Planet'Desk (stockNav dans Layout.tsx — les deux doivent rester le
+// miroir l'un de l'autre) : ce que j'ai → ce qui bouge → pour qui → ce
+// que ça coûte.
+const adminTabs=[{id:"dashboard",label:"Dashboard",icon:"📊"},{id:"references",label:"Références",icon:"🍷"},{id:"espaces",label:"Espaces",icon:"🗄️"},{id:"entrees",label:"Entrées",icon:"📥"},{id:"sorties",label:"Sorties",icon:"📤"},{id:"adherents",label:"Adhérents",icon:"👥"},{id:"grille",label:"Tarifs",icon:"📋"},{id:"facturation",label:"Relevés",icon:"🧾"},{id:"compta",label:"Compta Matière",icon:"⚖️"},{id:"journal",label:"Journal",icon:"📝"},{id:"users",label:"Utilisateurs",icon:"🔐"},{id:"reglages",label:"Réglages",icon:"⚙️"},{id:"adherent",label:"Espace Adh.",icon:"👤"}];
 
 const adherentTabs=[{id:"adherent",label:"Mon Espace",icon:"👤"}];
 
-export default function App({session,forcedTab}){const[d,sR]=useState(null);const[tab,sTab]=useState("dashboard");const[ld2,sLd]=useState(true);const[sb,sSb]=useState(true);
+export default function App({session,forcedTab,onTabChange}){const[d,sR]=useState(null);const[tab,sTab]=useState("dashboard");const[ld2,sLd]=useState(true);const[sb,sSb]=useState(true);
 // Session persistée : sur téléphone, on reste connecté entre deux scans de QR code
 const[currentUser,setCurrentUser]=useState(()=>{try{const s=localStorage.getItem("pa-session");return s?JSON.parse(s):null;}catch{return null;}});
 // Route /stock/fiche/REFxxxx (arrivée via scan de QR code)
@@ -1994,6 +1998,15 @@ const allowedTabIds=useMemo(()=>{
 // Il n'est appliqué que s'il fait partie des onglets autorisés (sinon on
 // pourrait ouvrir n'importe quel onglet en modifiant l'URL).
 useEffect(()=>{if(forcedTab&&allowedTabIds.includes(forcedTab))sTab(forcedTab);},[forcedTab,allowedTabIds]);
+
+// Un changement d'onglet passe par l'URL du Desk quand elle pilote la
+// navigation : sans cela, la barre d'onglets mobile et le menu de gauche
+// se désynchronisaient (l'URL gardait l'ancien onglet, qui ne pouvait
+// plus être rouvert).
+const goTab=(id)=>{if(onTabChange)onTabChange(id);else sTab(id);};
+
+// La pastille de l'onglet actif reste visible dans la barre mobile.
+useEffect(()=>{try{document.querySelector(`.pa-tabstrip [data-tab="${tab}"]`)?.scrollIntoView({block:"nearest",inline:"center",behavior:"smooth"});}catch{/* défilement indisponible */}},[tab]);
 
 // Synchro temps réel : adopte les modifications faites sur les autres
 // appareils (ordinateur / téléphone / autres sessions) dès qu'elles arrivent.
@@ -2057,15 +2070,15 @@ const perms=currentUser.permissions||{};
 let visibleTabs;
 if(isAdh){visibleTabs=adherentTabs;}
 else if(isAdmin){visibleTabs=adminTabs;}
-else{// logisticien with custom permissions
+else{// logisticien : droits cochés par l'admin, même ordre que le menu Desk
 visibleTabs=[{id:"dashboard",label:"Dashboard",icon:"📊"}];
-if(perms.entrees)visibleTabs.push({id:"entrees",label:"Entrées",icon:"📥"});
 if(perms.entrees)visibleTabs.push({id:"references",label:"Références",icon:"🍷"});
-if(perms.sorties)visibleTabs.push({id:"sorties",label:"Sorties",icon:"📤"});
 if(perms.espaces)visibleTabs.push({id:"espaces",label:"Espaces",icon:"🗄️"});
+if(perms.entrees)visibleTabs.push({id:"entrees",label:"Entrées",icon:"📥"});
+if(perms.sorties)visibleTabs.push({id:"sorties",label:"Sorties",icon:"📤"});
+if(perms.grille)visibleTabs.push({id:"grille",label:"Tarifs",icon:"📋"});
 if(perms.facturation)visibleTabs.push({id:"facturation",label:"Relevés",icon:"🧾"});
 if(perms.compta)visibleTabs.push({id:"compta",label:"Compta Matière",icon:"⚖️"});
-if(perms.grille)visibleTabs.push({id:"grille",label:"Tarifs",icon:"📋"});
 visibleTabs.push({id:"journal",label:"Journal",icon:"📝"});
 }
 
@@ -2093,6 +2106,29 @@ default:return null;}}catch(err){return <Card><div style={{color:P.rd,fontSize:1
 const roleColors={admin:P.ac,logisticien:P.am,adherent:P.gn};
 const roleLabels={admin:"Administrateur",logisticien:"Logisticien",adherent:"Adhérent"};
 
+// Styles partagés des deux modes : transition douce entre onglets,
+// barre d'onglets mobile sans ascenseur visible, grilles de formulaire
+// qui passent sur une colonne sous 640 px (les styles en ligne ne
+// peuvent pas porter de media query).
+const paStyles=<style>{`
+.pa-fade{animation:paFade .18s ease-out}
+@keyframes paFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.pa-tabstrip{scrollbar-width:none}
+.pa-tabstrip::-webkit-scrollbar{display:none}
+.pa-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pa-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pa-grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:640px){.pa-grid2,.pa-grid3,.pa-grid4{grid-template-columns:1fr}}
+@media(max-width:900px){.pa-grid4{grid-template-columns:1fr 1fr}}
+@media(prefers-reduced-motion:reduce){.pa-fade{animation:none}}
+`}</style>;
+
+// Barre d'onglets du mode intégré sur téléphone : un appui pour changer
+// d'écran, sans repasser par le menu du Desk. Les onglets retirés du
+// menu (journal, utilisateurs, réglages, espace adhérent des salariés)
+// n'y figurent pas non plus.
+const stripTabs=visibleTabs.filter(t=>!["journal","users","reglages","adherent"].includes(t.id));
+
 const exp=isMobile?true:sb; // menu toujours déplié dans le tiroir mobile
 const navContent=<>
 <div style={{padding:exp?"16px 14px":"16px 10px",borderBottom:`1px solid ${P.bd}`,display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>isMobile?setDrawer(false):sSb(!sb)}><img src={(d&&d.logo)||LOGO} width={exp?40:32} height={exp?40:32} style={{borderRadius:"50%",flexShrink:0,objectFit:"cover"}}/>{exp&&<div style={{fontWeight:700,fontSize:13,color:P.ac,whiteSpace:"nowrap"}}>Planet’Stock<br/><span style={{fontWeight:400,fontSize:9,color:P.tm}}>by Planet Aura</span></div>}</div>
@@ -2114,11 +2150,16 @@ const navContent=<>
 </>;
 
 if(session)return <div style={{fontFamily:FN,background:P.bg,color:P.tx,minHeight:"100vh"}}>
-<div style={{flex:1,overflow:"auto",padding:isMobile?12:24}}><div style={{maxWidth:1120}}><ErrorBoundary key={tab}>{R()}</ErrorBoundary></div></div>
+{paStyles}
+{isMobile&&stripTabs.length>1&&<div className="pa-tabstrip" style={{position:"sticky",top:52,zIndex:30,display:"flex",gap:6,overflowX:"auto",background:P.bg,borderBottom:`1px solid ${P.bd}`,padding:"8px 10px",WebkitOverflowScrolling:"touch"}}>
+{stripTabs.map(t=><button key={t.id} data-tab={t.id} onClick={()=>goTab(t.id)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,border:`1px solid ${tab===t.id?P.ac:P.bd}`,background:tab===t.id?P.acs:P.sf,color:tab===t.id?P.ac:P.tm,fontWeight:600,fontSize:12,fontFamily:FN,borderRadius:20,padding:"8px 13px",minHeight:40,cursor:"pointer",transition:"all .15s"}}>{t.icon} {t.label}</button>)}
+</div>}
+<div style={{padding:isMobile?12:24}}><div className="pa-fade" key={tab} style={{maxWidth:1440,margin:"0 auto"}}><ErrorBoundary key={tab}>{R()}</ErrorBoundary></div></div>
 </div>;
 
 return <div style={{fontFamily:FN,background:P.bg,color:P.tx,minHeight:"100vh",display:"flex",flexDirection:isMobile?"column":"row"}}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+{paStyles}
 {isMobile?<>
 {/* Barre supérieure mobile */}
 <div style={{position:"sticky",top:0,zIndex:100,display:"flex",alignItems:"center",gap:10,background:P.sf,borderBottom:`1px solid ${P.bd}`,padding:"10px 12px",boxShadow:"0 2px 8px #0001"}}>
@@ -2134,6 +2175,6 @@ return <div style={{fontFamily:FN,background:P.bg,color:P.tx,minHeight:"100vh",d
 </div>}
 </>:
 <div style={{width:sb?220:56,background:P.sf,borderRight:`1px solid ${P.bd}`,transition:"width .2s",flexShrink:0,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"2px 0 8px #0001"}}>{navContent}</div>}
-<div style={{flex:1,overflow:"auto",padding:isMobile?12:24}}><div style={{maxWidth:1120}}><ErrorBoundary key={tab}>{R()}</ErrorBoundary></div></div>
+<div style={{flex:1,overflow:"auto",padding:isMobile?12:24}}><div className="pa-fade" key={tab} style={{maxWidth:1440,margin:"0 auto"}}><ErrorBoundary key={tab}>{R()}</ErrorBoundary></div></div>
 </div>;}
 

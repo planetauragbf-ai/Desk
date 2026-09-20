@@ -10,5 +10,10 @@ export interface StockSession {
   stockAccess?: StockAccess | null
 }
 
-declare const StockApp: ComponentType<{ session?: StockSession; forcedTab?: string }>
+declare const StockApp: ComponentType<{
+  session?: StockSession
+  forcedTab?: string
+  /** Changement d'onglet demandé par le module (barre mobile) : le Desk met l'URL à jour. */
+  onTabChange?: (id: string) => void
+}>
 export default StockApp

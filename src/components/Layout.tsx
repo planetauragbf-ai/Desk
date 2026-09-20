@@ -58,9 +58,10 @@ interface NavGroup {
 
 /**
  * Sous-menu Planet'Stock : les onglets de l'application, directement dans
- * le bandeau gauche et regroupés par catégorie (Opérations, Facturation,
- * Administration), chacune repliable. La liste dépend des droits stock du
- * salarié définis par l'admin.
+ * le bandeau gauche. Regroupement calqué sur le chemin de la marchandise —
+ * ce que j'ai (Stock), ce qui bouge (Mouvements), pour qui (Adhérents &
+ * tarifs : la grille tarifaire appartient à l'adhérent), ce que ça coûte
+ * (Facturation & douane). La liste dépend des droits stock du salarié.
  */
 function stockNav(profile: Profile | null): NavGroup[] {
   const t = (id: string, label: string, icon: string): NavItem => ({
@@ -74,41 +75,32 @@ function stockNav(profile: Profile | null): NavGroup[] {
 
   if (role === 'adherent') return [{ label: null, items: [t('adherent', 'Mon espace', '👤')] }]
 
-  if (role === 'admin') {
-    return [
-      { label: null, items: [t('dashboard', 'Dashboard', '📊')] },
-      {
-        label: 'Opérations',
-        items: [t('entrees', 'Entrées', '📥'), t('references', 'Références', '🍷'), t('sorties', 'Sorties', '📤'), t('espaces', 'Espaces', '🗄')],
-      },
-      {
-        label: 'Facturation',
-        items: [t('facturation', 'Relevés', '🧾'), t('compta', 'Compta matière', '⚖'), t('grille', 'Tarifs', '📋')],
-      },
-      {
-        // Utilisateurs, Journal et Réglages du stock sont retirés : les
-        // comptes, le journal global et les logos se gèrent dans Planet'Desk.
-        label: 'Administration',
-        items: [t('adherents', 'Adhérents', '👥')],
-      },
-    ]
-  }
-
-  // Logisticien (droits choisis par l'admin) ou correspondance email : on
-  // n'affiche que les onglets autorisés.
+  // Logisticien : droits cochés par l'admin. Admin et correspondance par
+  // email (comptes historiques) : tous les onglets, comme avant.
   const p = acc?.role === 'logisticien' ? acc.permissions ?? {} : null
+  const isAdmin = role === 'admin'
   const ok = (k: keyof NonNullable<typeof p>) => p === null || !!p[k]
-  const operations: NavItem[] = []
-  if (ok('entrees')) operations.push(t('entrees', 'Entrées', '📥'), t('references', 'Références', '🍷'))
-  if (ok('sorties')) operations.push(t('sorties', 'Sorties', '📤'))
-  if (ok('espaces')) operations.push(t('espaces', 'Espaces', '🗄'))
+
+  const stock: NavItem[] = []
+  if (ok('entrees')) stock.push(t('references', 'Références', '🍷'))
+  if (ok('espaces')) stock.push(t('espaces', 'Espaces', '🗄'))
+  const mouvements: NavItem[] = []
+  if (ok('entrees')) mouvements.push(t('entrees', 'Entrées', '📥'))
+  if (ok('sorties')) mouvements.push(t('sorties', 'Sorties', '📤'))
+  const adherents: NavItem[] = []
+  if (isAdmin) adherents.push(t('adherents', 'Adhérents', '👥'))
+  if (ok('grille')) adherents.push(t('grille', 'Tarifs', '📋'))
   const facturation: NavItem[] = []
   if (ok('facturation')) facturation.push(t('facturation', 'Relevés', '🧾'))
   if (ok('compta')) facturation.push(t('compta', 'Compta matière', '⚖'))
-  if (ok('grille')) facturation.push(t('grille', 'Tarifs', '📋'))
+
+  // Utilisateurs, Journal et Réglages du stock restent retirés : comptes,
+  // journal global et logos se gèrent dans Planet'Desk.
   const groups: NavGroup[] = [{ label: null, items: [t('dashboard', 'Dashboard', '📊')] }]
-  if (operations.length) groups.push({ label: 'Opérations', items: operations })
-  if (facturation.length) groups.push({ label: 'Facturation', items: facturation })
+  if (stock.length) groups.push({ label: 'Stock', items: stock })
+  if (mouvements.length) groups.push({ label: 'Mouvements', items: mouvements })
+  if (adherents.length) groups.push({ label: 'Adhérents & tarifs', items: adherents })
+  if (facturation.length) groups.push({ label: 'Facturation & douane', items: facturation })
   return groups
 }
 

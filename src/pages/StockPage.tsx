@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { Skeleton } from '../components/ui'
 
 // Planet'Stock est un module volumineux (QR codes, PDF, 3D) : chargé à la
 // demande pour ne pas alourdir le reste de l'application. Sa navigation
@@ -9,13 +10,21 @@ const StockApp = lazy(() => import('../stock/StockApp'))
 
 export default function StockPage() {
   const { profile } = useAuth()
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   return (
     <Suspense
-      fallback={<div className="min-h-[60vh] flex items-center justify-center text-aura-700">Chargement de Planet'Stock…</div>}
+      fallback={
+        <div className="p-4 md:p-6 max-w-3xl">
+          <Skeleton lines={6} />
+        </div>
+      }
     >
       <StockApp
         forcedTab={params.get('onglet') ?? undefined}
+        // La barre d'onglets mobile du module change d'écran en passant par
+        // l'URL : le menu du Desk et le module restent ainsi synchronisés
+        // (et le retour arrière du navigateur retraverse les onglets).
+        onTabChange={(id) => setParams({ onglet: id })}
         session={
           profile
             ? {
