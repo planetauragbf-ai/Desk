@@ -44,11 +44,26 @@ function qrApplyMask(M,R,m){const S=M.length,masks=[(r,c)=>(r+c)%2===0,r=>r%2===
 function qrPlaceFormat(M,mask){const S=M.length,fmt=qrFormatInfo(mask);const p1=[[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]];const p2=[[S-1,8],[S-2,8],[S-3,8],[S-4,8],[S-5,8],[S-6,8],[S-7,8],[8,S-8],[8,S-7],[8,S-6],[8,S-5],[8,S-4],[8,S-3],[8,S-2],[8,S-1]];for(let i=0;i<15;i++){const b=(fmt>>(14-i))&1;M[p1[i][0]][p1[i][1]]=b;M[p2[i][0]][p2[i][1]]=b;}}
 function generateQR(text){const t=text.toUpperCase();const data=qrEncodeAlpha(t);const ec=rsEncode(data,7);const all=[...data,...ec];const{M,R}=qrBuildMatrix(all);let bestMask=0,bestScore=Infinity;for(let m=0;m<8;m++){const masked=qrApplyMask(M,R,m);const tmp=masked.map(r=>[...r]);qrPlaceFormat(tmp,m);let score=0;for(let r=0;r<21;r++){let run=1;for(let c=1;c<21;c++){if(tmp[r][c]===tmp[r][c-1])run++;else{if(run>=5)score+=run-2;run=1;}}if(run>=5)score+=run-2;}if(score<bestScore){bestScore=score;bestMask=m;}}const final=qrApplyMask(M,R,bestMask);qrPlaceFormat(final,bestMask);return final;}
 
-function QRCode({refId,size=90,label,data:refData}){
+/** QR généré localement (matrice 21×21 : ne porte que la REF, courte). */
+function QRLocal({text,size}){
+const M=useMemo(()=>{try{return generateQR(text);}catch{return null;}},[text]);
+if(!M)return null;
+const q=2,T=M.length+q*2;
+return <svg width={size} height={size} viewBox={`0 0 ${T} ${T}`} shapeRendering="crispEdges" style={{borderRadius:3,border:"1px solid #e2e8f0",background:"#fff",display:"block"}}>
+{M.flatMap((row,y)=>row.map((v,x)=>v?<rect key={`${x}-${y}`} x={x+q} y={y+q} width="1" height="1" fill="#0f172a"/>:null))}
+</svg>;}
+
+function QRCode({refId,size=90,label}){
+// L'image distante encode l'URL complète de la fiche (trop longue pour
+// notre encodeur local, limité à ~25 caractères). Si le réseau manque —
+// cas réel en entrepôt — on retombe sur un QR local de la REF seule :
+// la scannette et la caméra du picking le lisent tout aussi bien, au
+// lieu d'afficher une image cassée.
+const[err,setErr]=useState(false);
 const url=`${typeof window!=="undefined"?window.location.origin:""}/stock/fiche/${refId}`;
 const qrSrc=`https://api.qrserver.com/v1/create-qr-code/?size=${size*2}x${size*2}&data=${encodeURIComponent(url)}&margin=1`;
 return <div style={{display:"inline-flex",flexDirection:"column",alignItems:"center",gap:4}}>
-<img src={qrSrc} width={size} height={size} alt={refId} style={{borderRadius:3,border:"1px solid #e2e8f0"}}/>
+{err?<QRLocal text={refId} size={size}/>:<img src={qrSrc} width={size} height={size} alt={refId} loading="lazy" onError={()=>setErr(true)} style={{borderRadius:3,border:"1px solid #e2e8f0"}}/>}
 {label&&<div style={{fontSize:8,color:"#64748b",fontFamily:"monospace",letterSpacing:.5}}>{label}</div>}
 </div>;}
 
@@ -88,12 +103,12 @@ const FN=`'DM Sans',system-ui,sans-serif`;
 
 // ─── ATOMS ───
 function Badge({children,color="ac"}){return <span style={{background:P[color+"s"]||P.acs,color:P[color]||P.ac,padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600}}>{children}</span>;}
-function Btn({children,onClick,v="primary",sm,dis,style:s2}){const b={fontFamily:FN,fontWeight:600,fontSize:sm?11:13,border:"none",borderRadius:8,cursor:dis?"not-allowed":"pointer",transition:"all .15s",opacity:dis?.45:1};const vs={primary:{...b,background:P.ac,color:"#fff",padding:sm?"6px 12px":"10px 20px"},secondary:{...b,background:P.sf2,color:P.tx,padding:sm?"6px 12px":"10px 20px",border:`1px solid ${P.bd}`},danger:{...b,background:P.rds,color:P.rd,padding:sm?"6px 12px":"10px 20px"},ghost:{...b,background:"transparent",color:P.tm,padding:sm?"4px 8px":"8px 16px"},success:{...b,background:P.gns,color:P.gn,padding:sm?"6px 12px":"10px 20px"}};return <button style={{...vs[v],...(s2||{})}} onClick={dis?undefined:onClick}>{children}</button>;}
+function Btn({children,onClick,v="primary",sm,dis,style:s2}){const b={fontFamily:FN,fontWeight:600,fontSize:sm?11:13,minHeight:sm?38:44,touchAction:"manipulation",border:"none",borderRadius:8,cursor:dis?"not-allowed":"pointer",transition:"all .15s",opacity:dis?.45:1};const vs={primary:{...b,background:P.ac,color:"#fff",padding:sm?"6px 12px":"10px 20px"},secondary:{...b,background:P.sf2,color:P.tx,padding:sm?"6px 12px":"10px 20px",border:`1px solid ${P.bd}`},danger:{...b,background:P.rds,color:P.rd,padding:sm?"6px 12px":"10px 20px"},ghost:{...b,background:"transparent",color:P.tm,padding:sm?"4px 8px":"8px 16px"},success:{...b,background:P.gns,color:P.gn,padding:sm?"6px 12px":"10px 20px"}};return <button style={{...vs[v],...(s2||{})}} onClick={dis?undefined:onClick}>{children}</button>;}
 function Inp({label,value,onChange,type="text",options,placeholder,sm,disabled,style:s2}){const is={fontFamily:FN,fontSize:sm?12:13,background:P.bg,color:P.tx,border:`1px solid ${P.bd}`,borderRadius:8,padding:sm?"7px 10px":"10px 14px",width:"100%",boxSizing:"border-box",outline:"none",...(s2||{})};const lbl=label&&<label style={{fontSize:10,color:P.tm,fontWeight:600,letterSpacing:.5,textTransform:"uppercase"}}>{label}</label>;if(options)return <div style={{display:"flex",flexDirection:"column",gap:4}}>{lbl}<select value={value} onChange={e=>onChange(e.target.value)} style={is} disabled={disabled}><option value="">{placeholder||"Sélectionner..."}</option>{options.map(o=><option key={typeof o==="string"?o:o.value} value={typeof o==="string"?o:o.value}>{typeof o==="string"?o:o.label}</option>)}</select></div>;return <div style={{display:"flex",flexDirection:"column",gap:4}}>{lbl}<input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={is} disabled={disabled}/></div>;}
 function Card({children,style:s2,onClick}){return <div onClick={onClick} style={{background:P.sf,border:`1px solid ${P.bd}`,borderRadius:12,padding:20,boxShadow:"0 1px 3px #0001",...(onClick?{cursor:"pointer"}:{}),...(s2||{})}}>{children}</div>;}
 function Stat({label,value,icon,color="ac"}){return <Card style={{display:"flex",alignItems:"center",gap:14,padding:"14px 18px"}}><div style={{width:42,height:42,borderRadius:10,background:P[color+"s"]||P.acs,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>{icon}</div><div><div style={{fontSize:22,fontWeight:700,color:P.tx}}>{value}</div><div style={{fontSize:10,color:P.tm,fontWeight:500}}>{label}</div></div></Card>;}
-function Table({columns,data,onRowClick}){if(!data.length)return <div style={{padding:30,textAlign:"center",color:P.td,fontSize:13}}>Aucune donnée</div>;return <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontFamily:FN,fontSize:12}}><thead><tr>{columns.map(c=><th key={c.key} style={{textAlign:"left",padding:"10px 12px",borderBottom:`2px solid ${P.bd}`,color:P.tm,fontSize:10,fontWeight:600,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>{c.label}</th>)}</tr></thead><tbody>{data.map((row,i)=><tr key={i} onClick={()=>onRowClick?.(row)} style={{cursor:onRowClick?"pointer":"default"}} onMouseEnter={e=>e.currentTarget.style.background=P.sf2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>{columns.map(c=><td key={c.key} style={{padding:"10px 12px",color:c.color?c.color(row):P.tx,whiteSpace:"nowrap",borderBottom:`1px solid ${P.bd}40`}}>{c.render?c.render(row):row[c.key]}</td>)}</tr>)}</tbody></table></div>;}
-function Modal({title,children,onClose,wide}){return <div style={{position:"fixed",inset:0,background:"#0004",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}} onClick={onClose}><div style={{background:P.sf,border:`1px solid ${P.bd}`,borderRadius:16,padding:24,maxWidth:wide?850:580,width:"100%",maxHeight:"88vh",overflowY:"auto",boxShadow:"0 20px 60px #0002"}} onClick={e=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}><h3 style={{color:P.tx,margin:0,fontSize:17}}>{title}</h3><Btn v="ghost" onClick={onClose} sm>✕</Btn></div>{children}</div></div>;}
+function Table({columns,data,onRowClick}){if(!data.length)return <div style={{padding:30,textAlign:"center",color:P.td,fontSize:13}}>Aucune donnée</div>;return <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}><table style={{width:"100%",borderCollapse:"collapse",fontFamily:FN,fontSize:12}}><thead><tr>{columns.map(c=><th key={c.key} style={{textAlign:"left",padding:"10px 12px",borderBottom:`2px solid ${P.bd}`,color:P.tm,fontSize:10,fontWeight:600,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>{c.label}</th>)}</tr></thead><tbody>{data.map((row,i)=><tr key={i} onClick={e=>{e.currentTarget.style.background="transparent";onRowClick?.(row);}} onTouchEnd={e=>{e.currentTarget.style.background="transparent";}} style={{cursor:onRowClick?"pointer":"default"}} onMouseEnter={e=>e.currentTarget.style.background=P.sf2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>{columns.map(c=><td key={c.key} style={{padding:onRowClick?"13px 12px":"10px 12px",color:c.color?c.color(row):P.tx,whiteSpace:"nowrap",borderBottom:`1px solid ${P.bd}40`}}>{c.render?c.render(row):row[c.key]}</td>)}</tr>)}</tbody></table></div>;}
+function Modal({title,children,onClose,wide}){return <div className="pa-modal" style={{position:"fixed",inset:0,background:"#0004",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px 10px",backdropFilter:"blur(4px)"}} onClick={onClose}><div style={{background:P.sf,border:`1px solid ${P.bd}`,borderRadius:16,padding:"min(24px,4.5vw)",maxWidth:wide?850:580,width:"100%",maxHeight:"88vh",overflowY:"auto",overscrollBehavior:"contain",boxShadow:"0 20px 60px #0002"}} onClick={e=>e.stopPropagation()}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}><h3 style={{color:P.tx,margin:0,fontSize:17}}>{title}</h3><Btn v="ghost" onClick={onClose} sm style={{minWidth:40,minHeight:40,fontSize:16}}>✕</Btn></div>{children}</div></div>;}
 
 // ─── EXPORTS & IMPRESSIONS ───
 function exportCSV(filename,headers,rows){
@@ -201,8 +216,8 @@ onChange([...(photos||[]),...news],`${news.length} photo(s) ajoutée(s)`);}catch
 setBusy(false);if(fileRef.current)fileRef.current.value="";};
 const del=async p=>{try{await deletePhoto(p.path);}catch{}onChange((photos||[]).filter(x=>x!==p),"Photo supprimée");setView(null);};
 return <div>
-<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-<div style={{fontSize:10,color:P.tm,fontWeight:600,textTransform:"uppercase",flex:1}}>📷 Photos ({(photos||[]).length})</div>
+<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+<div style={{fontSize:10,color:P.tm,fontWeight:600,textTransform:"uppercase",flex:1,minWidth:110}}>📷 Photos ({(photos||[]).length})</div>
 <input ref={camRef} type="file" accept="image/*" capture="environment" onChange={add} style={{display:"none"}}/>
 <input ref={fileRef} type="file" accept="image/*" multiple onChange={add} style={{display:"none"}}/>
 <Btn v="secondary" sm dis={busy} onClick={()=>camRef.current?.click()}>{busy?"⏳ Envoi...":"📷 Prendre une photo"}</Btn>
@@ -248,6 +263,9 @@ return <Modal title={`Relevé ${f.numero}`} onClose={onClose} wide>
 </Modal>;}
 
 // ─── SCAN VERIFICATION (qty capped) ───
+// jsQR ne se charge qu'une seule fois, et seulement au premier scan.
+let _jsqrP=null;const getJsqr=()=>_jsqrP||(_jsqrP=import("jsqr").then(m=>m.default||m));
+
 function ScanModal({sortie,references,onValidate,onClose}){
 const refsToScan=Object.entries(sortie.refsDetail||{}).filter(([,q])=>+q>0).map(([refId,q])=>({refId,need:+q}));
 const [scanned,setScanned]=useState({});const [inp,setInp]=useState("");const [res,setRes]=useState(null);const [qty,setQty]=useState("");
@@ -279,20 +297,23 @@ const maxForCurrent=res?.ok&&!res.auto?refsToScan.find(r=>r.refId===res.refId)?.
 const stopCam=()=>{try{streamRef.current?.getTracks().forEach(t=>t.stop());}catch{}streamRef.current=null;setCam(false);};
 const startCam=async()=>{try{const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});streamRef.current=stream;setCam(true);}catch(e){alert("Caméra inaccessible : "+(e?.message||e)+"\nUtilisez le champ de saisie ou une douchette USB/Bluetooth.");}};
 useEffect(()=>{if(cam&&videoRef.current&&streamRef.current){videoRef.current.srcObject=streamRef.current;videoRef.current.play().catch(()=>{});}},[cam]);
+// handleCode change à chaque scan (état scanned) : on le lit via une réf
+// pour que la boucle caméra, elle, ne soit jamais reconstruite.
+const handleRef=useRef();handleRef.current=handleCode;
 useEffect(()=>{
 if(!cam)return;
 let stop=false;const canvas=document.createElement("canvas");const ctx=canvas.getContext("2d",{willReadFrequently:true});
-let jsqr=null;import("jsqr").then(m=>{jsqr=m.default||m;});
+let jsqr=null;getJsqr().then(m=>{jsqr=m;});
 const tick=()=>{if(stop)return;
 const v=videoRef.current;
 if(jsqr&&v&&v.readyState===4&&v.videoWidth>0){
 canvas.width=v.videoWidth;canvas.height=v.videoHeight;ctx.drawImage(v,0,0);
 try{const img=ctx.getImageData(0,0,canvas.width,canvas.height);const q=jsqr(img.data,img.width,img.height,{inversionAttempts:"dontInvert"});
 if(q&&q.data){const code=extractRef(q.data);const now=Date.now();
-if(!(lastScanRef.current.code===code&&now-lastScanRef.current.t<1600)){lastScanRef.current={code,t:now};handleCode(code);}}}catch{}}
+if(!(lastScanRef.current.code===code&&now-lastScanRef.current.t<1600)){lastScanRef.current={code,t:now};handleRef.current(code);}}}catch{}}
 setTimeout(tick,170);};
 tick();return()=>{stop=true;};
-},[cam,mode,scanned]);
+},[cam]);
 useEffect(()=>()=>{try{streamRef.current?.getTracks().forEach(t=>t.stop());}catch{}},[]);
 
 return <Modal title="🔍 Vérification Picking" onClose={()=>{stopCam();onClose();}} wide>
@@ -312,7 +333,7 @@ return <Modal title="🔍 Vérification Picking" onClose={()=>{stopCam();onClose
 </div>}
 
 {/* Saisie manuelle / douchette */}
-<div style={{display:"flex",gap:8,marginBottom:12}}><input value={inp} onChange={e=>setInp(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doScan()} placeholder="Douchette ou saisie REF..." style={{flex:1,fontFamily:"monospace",fontSize:16,background:P.bg,color:P.tx,border:`2px solid ${P.ac}`,borderRadius:8,padding:"12px 16px",outline:"none",minWidth:0}} autoFocus={!cam}/><Btn onClick={doScan}>Valider</Btn></div>
+<div style={{display:"flex",gap:8,marginBottom:12}}><input value={inp} onChange={e=>setInp(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doScan()} placeholder="Douchette ou saisie REF..." style={{flex:1,fontFamily:"monospace",fontSize:16,background:P.bg,color:P.tx,border:`2px solid ${P.ac}`,borderRadius:8,padding:"12px 16px",outline:"none",minWidth:0}} autoFocus={!cam&&typeof window!=="undefined"&&window.matchMedia("(pointer:fine)").matches}/><Btn onClick={doScan}>Valider</Btn></div>
 
 {res&&!res.ok&&<div style={{background:P.rds,border:`2px solid ${P.rd}`,borderRadius:10,padding:14,marginBottom:12,display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:30}}>🚫</span><div style={{fontWeight:700,color:P.rd,fontSize:14}}>{res.msg}</div></div>}
 {res&&res.ok&&res.auto&&<div style={{background:P.gns,border:`2px solid ${P.gn}`,borderRadius:10,padding:14,marginBottom:12,display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:30}}>✅</span><div><div style={{fontWeight:700,color:P.gn,fontSize:14}}>BONNE BOUTEILLE — {references.find(r=>r.id===res.refId)?.designation}</div><div style={{fontSize:12,color:P.tm}}>Comptée : <b style={{color:P.gn}}>{res.count} / {res.need}</b>{res.count>=res.need?" — référence complète ✔":" — scannez la suivante"}</div></div></div>}
@@ -341,19 +362,24 @@ const fileRef=useRef(null);
 
 const handleFile=e=>{const file=e.target.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{const txt=ev.target?.result||"";setCsvText(txt);const rows=parseCSV(txt);setParsed(rows);setResult(null);};reader.readAsText(file,"utf-8");};
 
-const doImport=()=>{if(!parsed.length)return;setImporting(true);const nd={...d};let count=0;let skipped=0;
+const doImport=()=>{if(!parsed.length)return;setImporting(true);
+// Un tick de différé : sinon React regroupe tout et « Import en cours... »
+// ne s'affiche jamais — sur un gros CSV, l'interface semblait gelée.
+setTimeout(()=>{const nd={...d};let count=0;let skipped=0;
 // Accepte l'identifiant (ADH001) OU le nom exact de l'adhérent, insensible à la casse
 const resolveAdh=x=>{const n=(x||"").trim().toLowerCase();return (nd.adherents||[]).find(a=>a.id.toLowerCase()===n)||(nd.adherents||[]).find(a=>(a.name||"").trim().toLowerCase()===n);};
 
 if(importType==="references"){
+const newRefs=[];
 parsed.forEach(row=>{
   if(!row.adherentId||!row.designation){skipped++;return;}
   const adhR=resolveAdh(row.adherentId);
   if(!adhR){skipped++;return;}
-  const id="REF"+String((nd.references?.length||0)+1).padStart(4,"0");
-  nd.references=[...(nd.references||[]),{id,adherentId:adhR.id,designation:row.designation,nomenclature:row.nomenclature||"AOP",couleur:row.couleur||"Rouge",volume:row.volume||"75cl",alcool:row.alcool||"",prixUnitaire:+(row.prixUnitaire||0),droitsAccise:row.droitsAccise||"Droit suspendu",condStock:row.condStock||"Espace 12 btls",emplacement:row.emplacement||"",alertStock:+(row.alertStock||0),stockActuel:+(row.nbBouteilles||0),mouvements:[{date:new Date().toISOString(),type:"Import CSV",qty:+(row.nbBouteilles||0),user:cu?.nom||"Admin"}],creeLe:new Date().toISOString()}];
+  const id="REF"+String((nd.references?.length||0)+newRefs.length+1).padStart(4,"0");
+  newRefs.push({id,adherentId:adhR.id,designation:row.designation,nomenclature:row.nomenclature||"AOP",couleur:row.couleur||"Rouge",volume:row.volume||"75cl",alcool:row.alcool||"",prixUnitaire:+(row.prixUnitaire||0),droitsAccise:row.droitsAccise||"Droit suspendu",condStock:row.condStock||"Espace 12 btls",emplacement:row.emplacement||"",alertStock:+(row.alertStock||0),stockActuel:+(row.nbBouteilles||0),mouvements:[{date:new Date().toISOString(),type:"Import CSV",qty:+(row.nbBouteilles||0),user:cu?.nom||"Admin"}],creeLe:new Date().toISOString()});
   count++;
 });
+if(newRefs.length)nd.references=[...(nd.references||[]),...newRefs];
 }
 
 if(importType==="entrees"){
@@ -394,7 +420,7 @@ Object.values(groups).forEach(g=>{
 }
 
 nd.auditLog=[...(nd.auditLog||[]),{date:new Date().toISOString(),user:cu?.nom||"Admin",role:cu?.role||"admin",module:"Import CSV",action:`Import ${importType} — ${count} ligne(s) importée(s)`}];
-sD(nd);setResult({ok:true,count,skipped});setImporting(false);setCsvText("");setParsed([]);};
+sD(nd);setResult({ok:true,count,skipped});setImporting(false);setCsvText("");setParsed([]);},50);};
 
 const types=[{id:"references",label:"🍷 Références",desc:"Importer des fiches vins avec stock initial"},{id:"entrees",label:"📥 Entrées",desc:"Importer des réceptions de marchandise"},{id:"sorties",label:"📤 Sorties",desc:"Importer des sorties de stock"}];
 
@@ -402,12 +428,12 @@ return <Modal title="📥 Import CSV — Administration" onClose={onClose} wide>
 <div style={{display:"grid",gap:14}}>
 
 {/* Type selector */}
-<div style={{display:"flex",gap:6}}>{types.map(t=><Btn key={t.id} v={importType===t.id?"primary":"secondary"} sm onClick={()=>{setImportType(t.id);setParsed([]);setResult(null);setCsvText("");}}>{t.label}</Btn>)}</div>
+<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{types.map(t=><Btn key={t.id} v={importType===t.id?"primary":"secondary"} sm onClick={()=>{setImportType(t.id);setParsed([]);setResult(null);setCsvText("");}}>{t.label}</Btn>)}</div>
 
 {/* Template download */}
 <Card style={{background:P.bg}}>
-<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-<div><div style={{fontSize:12,fontWeight:600,color:P.tx}}>Modèle CSV — {types.find(t=>t.id===importType)?.label}</div>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+<div style={{minWidth:200,flex:"1 1 220px"}}><div style={{fontSize:12,fontWeight:600,color:P.tx}}>Modèle CSV — {types.find(t=>t.id===importType)?.label}</div>
 <div style={{fontSize:11,color:P.tm,marginTop:2}}>{types.find(t=>t.id===importType)?.desc}</div>
 <div style={{fontSize:10,color:P.tm,marginTop:4}}>Séparateur : <b>point-virgule (;)</b> — Encodage : <b>UTF-8</b> — Colonne adherentId : <b>identifiant (ADH001) ou nom exact</b> de l'adhérent</div>
 </div>
@@ -456,7 +482,9 @@ return <Modal title="📥 Import CSV — Administration" onClose={onClose} wide>
 </Modal>;}
 
 // ═══ TABS ═══
-function Dashboard({data:d,setData:sD,currentUser:cu}){const[showImport,setShowImport]=useState(false);const aa=d.adherents.filter(a=>a.stockageActif);const tB=d.references.reduce((s,r)=>s+(r.stockActuel||0),0);const allE=[];d.espaces.forEach(z=>z.rangs.forEach(r=>r.emplacements.forEach(e=>allE.push(e))));const occ=allE.filter(e=>d.references.some(x=>x.emplacement===e.id&&(x.stockActuel||0)>0)).length;const ca=d.factures.reduce((s,f)=>s+f.totalTTC,0);const isAdmin=cu?.role==="admin";
+function Dashboard({data:d,setData:sD,currentUser:cu}){const[showImport,setShowImport]=useState(false);
+const{aa,tB,allE,occ,ca}=useMemo(()=>{const aa=d.adherents.filter(a=>a.stockageActif);const tB=d.references.reduce((s,r)=>s+(r.stockActuel||0),0);const allE=[];d.espaces.forEach(z=>z.rangs.forEach(r=>r.emplacements.forEach(e=>allE.push(e))));const occ=allE.filter(e=>d.references.some(x=>x.emplacement===e.id&&(x.stockActuel||0)>0)).length;const ca=d.factures.reduce((s,f)=>s+f.totalTTC,0);return{aa,tB,allE,occ,ca};},[d]);
+const isAdmin=cu?.role==="admin";
 return <div>
 {isAdmin&&<div style={{display:"flex",justifyContent:"flex-end",marginBottom:14}}><Btn onClick={()=>setShowImport(true)}>📥 Import CSV</Btn></div>}
 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12,marginBottom:22}}><Stat label="Adhérents actifs" value={aa.length} icon="👥" color="ac"/><Stat label="Références" value={d.references.length} icon="🍷" color="bl"/><Stat label="Bouteilles" value={tB.toLocaleString("fr")} icon="📦" color="gn"/><Stat label="Empl." value={`${occ}/${allE.length}`} icon="🗄️" color="am"/><Stat label="Prestations TTC" value={`${ca.toFixed(0)} €`} icon="💰" color="gn"/></div>
@@ -467,7 +495,7 @@ return <div>
 function Adherents({data:d,setData:sD}){const[sh,sSh]=useState(false);const[ed,sEd]=useState(null);const[f,sF]=useState({name:"",contact:"",email:"",adresse:"",stockageActif:true});
 const open=a=>{sEd(a);sF(a?{name:a.name,contact:a.contact,email:a.email,adresse:a.adresse||"",stockageActif:a.stockageActif}:{name:"",contact:"",email:"",adresse:"",stockageActif:true});sSh(true);};
 const doSave=()=>{if(!f.name)return;const nd={...d};if(ed)nd.adherents=nd.adherents.map(a=>a.id===ed.id?{...a,...f}:a);else nd.adherents=[...nd.adherents,{id:"ADH"+String(nd.adherents.length+1).padStart(3,"0"),...f,grille:{...G1}}];sD(nd);sSh(false);};
-return <div><div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}><h3 style={{color:P.tx,margin:0}}>Adhérents</h3><Btn onClick={()=>open(null)}>+ Adhérent</Btn></div><Card><Table columns={[{key:"id",label:"ID"},{key:"name",label:"Nom"},{key:"contact",label:"Contact"},{key:"email",label:"Email"},{key:"s",label:"Stockage",render:r=><Badge color={r.stockageActif?"gn":"rd"}>{r.stockageActif?"Actif":"Off"}</Badge>},{key:"a",label:"",render:r=><Btn v="ghost" sm onClick={e=>{e.stopPropagation();open(r);}}>✏️</Btn>}]} data={d.adherents}/></Card>
+return <div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,marginBottom:14}}><h3 style={{color:P.tx,margin:0}}>Adhérents</h3><Btn onClick={()=>open(null)}>+ Adhérent</Btn></div><Card><Table columns={[{key:"id",label:"ID"},{key:"name",label:"Nom"},{key:"contact",label:"Contact"},{key:"email",label:"Email"},{key:"s",label:"Stockage",render:r=><Badge color={r.stockageActif?"gn":"rd"}>{r.stockageActif?"Actif":"Off"}</Badge>},{key:"a",label:"",render:r=><Btn v="ghost" sm onClick={e=>{e.stopPropagation();open(r);}}>✏️</Btn>}]} data={d.adherents}/></Card>
 {sh&&<Modal title={ed?"Modifier":"Nouvel Adhérent"} onClose={()=>sSh(false)}><div style={{display:"grid",gap:10}}><Inp label="Nom" value={f.name} onChange={v=>sF({...f,name:v})}/><Inp label="Contact" value={f.contact} onChange={v=>sF({...f,contact:v})}/><Inp label="Email" value={f.email} onChange={v=>sF({...f,email:v})}/><Inp label="Adresse" value={f.adresse} onChange={v=>sF({...f,adresse:v})}/><Inp label="Mot de passe" value={f.mdp||""} onChange={v=>sF({...f,mdp:v})}/><Inp label="Stockage" value={f.stockageActif?"Oui":"Non"} options={["Oui","Non"]} onChange={v=>sF({...f,stockageActif:v==="Oui"})}/><Btn onClick={doSave}>{ed?"Enregistrer":"Créer"}</Btn></div></Modal>}</div>;}
 
 function Entrees({data:d,setData:sD,currentUser:cu}){const[sh,sSh]=useState(false);const[fA,sfA]=useState("");const[ed,sEd]=useState(null);const[ef,sEf]=useState({});
@@ -557,7 +585,7 @@ if(fStock==="alerte"&&!(r.alertStock>0&&r.stockActuel<=r.alertStock))return fals
 if(fStock==="vide"&&r.stockActuel!==0)return false;
 return true;});
 const totBtlsFiltered=filteredRefs.reduce((s,r)=>s+(r.stockActuel||0),0);
-return <div><div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}><h3 style={{color:P.tx,margin:0}}>Références</h3><div style={{display:"flex",gap:6,flexWrap:"wrap"}}><Btn v="secondary" sm onClick={()=>{if(!filteredRefs.length)return;printLabels(filteredRefs,d.adherents);}}>🏷️ Étiquettes QR</Btn><Btn v="secondary" sm onClick={()=>exportCSV(`references_${dateTag()}.csv`,["Réf","Désignation","Adhérent","Nomenclature","Couleur","Volume","Alcool %","Prix HT","Accise","Conditionnement","Emplacement","Alerte","Stock"],filteredRefs.map(r=>[r.id,r.designation,d.adherents.find(a=>a.id===r.adherentId)?.name||r.adherentId,r.nomenclature,r.couleur,r.volume,r.alcool||"",r.prixUnitaire||"",r.droitsAccise,r.condStock,r.emplacement||"",r.alertStock||"",r.stockActuel]))}>⬇️ Export</Btn><Btn v="secondary" sm onClick={()=>exportCSV(`mouvements_${dateTag()}.csv`,["Réf","Désignation","Date","Type","Quantité","Utilisateur"],filteredRefs.flatMap(r=>(r.mouvements||[]).map(m=>[r.id,r.designation,(m.date||"").slice(0,10),m.type,m.qty,m.user||""])))}>⬇️ Mouvements</Btn><Btn onClick={()=>sSh(true)}>+ Référence</Btn></div></div>
+return <div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,marginBottom:14}}><h3 style={{color:P.tx,margin:0}}>Références</h3><div style={{display:"flex",gap:6,flexWrap:"wrap"}}><Btn v="secondary" sm onClick={()=>{if(!filteredRefs.length)return;printLabels(filteredRefs,d.adherents);}}>🏷️ Étiquettes QR</Btn><Btn v="secondary" sm onClick={()=>exportCSV(`references_${dateTag()}.csv`,["Réf","Désignation","Adhérent","Nomenclature","Couleur","Volume","Alcool %","Prix HT","Accise","Conditionnement","Emplacement","Alerte","Stock"],filteredRefs.map(r=>[r.id,r.designation,d.adherents.find(a=>a.id===r.adherentId)?.name||r.adherentId,r.nomenclature,r.couleur,r.volume,r.alcool||"",r.prixUnitaire||"",r.droitsAccise,r.condStock,r.emplacement||"",r.alertStock||"",r.stockActuel]))}>⬇️ Export</Btn><Btn v="secondary" sm onClick={()=>exportCSV(`mouvements_${dateTag()}.csv`,["Réf","Désignation","Date","Type","Quantité","Utilisateur"],filteredRefs.flatMap(r=>(r.mouvements||[]).map(m=>[r.id,r.designation,(m.date||"").slice(0,10),m.type,m.qty,m.user||""])))}>⬇️ Mouvements</Btn><Btn onClick={()=>sSh(true)}>+ Référence</Btn></div></div>
 <Card style={{marginBottom:12,padding:"12px 16px"}}>
 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}>
 <Inp label="🔎 Recherche" value={q} onChange={sQ} placeholder="Réf, désignation, emplacement..." sm/>
@@ -575,7 +603,7 @@ return <div><div style={{display:"flex",justifyContent:"space-between",marginBot
 </div>
 </Card>
 <Card><Table columns={[{key:"qr",label:"QR",render:r=><QRCode refId={r.id} size={34}/>},{key:"id",label:"Réf"},{key:"adherentId",label:"Adhérent",render:r=>d.adherents.find(a=>a.id===r.adherentId)?.name?.split(" ").slice(-1)[0]||""},{key:"designation",label:"Désignation"},{key:"couleur",label:"Coul."},{key:"stockActuel",label:"Stock",render:r=>{const al=r.alertStock>0&&r.stockActuel<=r.alertStock;return <span style={{color:al?P.rd:P.gn,fontWeight:700}}>{r.stockActuel}{al?" ⚠️":""}</span>;}},{key:"droitsAccise",label:"Accise",render:r=><Badge color={r.droitsAccise==="Droit suspendu"?"am":"gn"}>{r.droitsAccise==="Droit suspendu"?"Susp.":"Acq."}</Badge>},{key:"a",label:"",render:r=><div style={{display:"flex",gap:2}}><Btn v="ghost" sm onClick={e=>{e.stopPropagation();sDt(r);}}>📋</Btn><Btn v="ghost" sm onClick={e=>{e.stopPropagation();sEdR(r);sRf({adherentId:r.adherentId,designation:r.designation,nomenclature:r.nomenclature,couleur:r.couleur,volume:r.volume,alcool:r.alcool||"",prixUnitaire:r.prixUnitaire||"",droitsAccise:r.droitsAccise,condStock:r.condStock,emplacement:r.emplacement||"",alertStock:r.alertStock||""});}}>✏️</Btn></div>}]} data={filteredRefs}/></Card>
-{dt&&<Modal title={dt.designation} onClose={()=>sDt(null)} wide><div style={{display:"flex",gap:20,marginBottom:16}}><QRCode refId={dt.id} size={120} label={dt.id}/><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:8,fontSize:12,flex:1}}><div><span style={{color:P.tm,fontSize:10}}>Adhérent</span><br/>{d.adherents.find(a=>a.id===dt.adherentId)?.name}</div><div><span style={{color:P.tm,fontSize:10}}>Prix</span><br/>{dt.prixUnitaire} €</div><div><span style={{color:P.tm,fontSize:10}}>Stock</span><br/><span style={{fontWeight:700,color:P.gn,fontSize:20}}>{dt.stockActuel}</span></div><div><span style={{color:P.tm,fontSize:10}}>Alerte</span><br/>{dt.alertStock||"—"}</div><div><span style={{color:P.tm,fontSize:10}}>Emplacement</span><br/>{dt.emplacement}</div><div><span style={{color:P.tm,fontSize:10}}>Cond.</span><br/>{dt.condStock}</div><div><span style={{color:P.tm,fontSize:10}}>Nomenclature</span><br/>{dt.nomenclature}</div><div><span style={{color:P.tm,fontSize:10}}>Accise</span><br/><Badge color={dt.droitsAccise==="Droit suspendu"?"am":"gn"}>{dt.droitsAccise}</Badge></div></div></div><div style={{background:P.bg,borderRadius:8,padding:10,marginBottom:10,fontSize:11,color:P.tm}}>📱 Scannez ce QR code avec votre téléphone pour ouvrir la fiche technique : <b style={{color:P.ac}}>{typeof window!=="undefined"?window.location.host:""}/stock/fiche/{dt.id}</b></div><div style={{borderTop:`1px solid ${P.bd}`,paddingTop:10}}><div style={{fontSize:10,fontWeight:600,color:P.tm,marginBottom:6}}>MOUVEMENTS</div>{(dt.mouvements||[]).map((m,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${P.bd}30`,fontSize:11}}><span style={{color:P.tm}}>{new Date(m.date).toLocaleDateString("fr")}</span><span>{m.type}</span><span style={{fontWeight:600,color:m.qty>=0?P.gn:P.rd}}>{m.qty>=0?"+":""}{m.qty}</span></div>)}</div>
+{dt&&<Modal title={dt.designation} onClose={()=>sDt(null)} wide><div style={{display:"flex",gap:20,marginBottom:16,flexWrap:"wrap"}}><QRCode refId={dt.id} size={120} label={dt.id}/><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:8,fontSize:12,flex:1}}><div><span style={{color:P.tm,fontSize:10}}>Adhérent</span><br/>{d.adherents.find(a=>a.id===dt.adherentId)?.name}</div><div><span style={{color:P.tm,fontSize:10}}>Prix</span><br/>{dt.prixUnitaire} €</div><div><span style={{color:P.tm,fontSize:10}}>Stock</span><br/><span style={{fontWeight:700,color:P.gn,fontSize:20}}>{dt.stockActuel}</span></div><div><span style={{color:P.tm,fontSize:10}}>Alerte</span><br/>{dt.alertStock||"—"}</div><div><span style={{color:P.tm,fontSize:10}}>Emplacement</span><br/>{dt.emplacement}</div><div><span style={{color:P.tm,fontSize:10}}>Cond.</span><br/>{dt.condStock}</div><div><span style={{color:P.tm,fontSize:10}}>Nomenclature</span><br/>{dt.nomenclature}</div><div><span style={{color:P.tm,fontSize:10}}>Accise</span><br/><Badge color={dt.droitsAccise==="Droit suspendu"?"am":"gn"}>{dt.droitsAccise}</Badge></div></div></div><div style={{background:P.bg,borderRadius:8,padding:10,marginBottom:10,fontSize:11,color:P.tm}}>📱 Scannez ce QR code avec votre téléphone pour ouvrir la fiche technique : <b style={{color:P.ac}}>{typeof window!=="undefined"?window.location.host:""}/stock/fiche/{dt.id}</b></div><div style={{borderTop:`1px solid ${P.bd}`,paddingTop:10}}><div style={{fontSize:10,fontWeight:600,color:P.tm,marginBottom:6}}>MOUVEMENTS</div>{(dt.mouvements||[]).map((m,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${P.bd}30`,fontSize:11}}><span style={{color:P.tm}}>{new Date(m.date).toLocaleDateString("fr")}</span><span>{m.type}</span><span style={{fontWeight:600,color:m.qty>=0?P.gn:P.rd}}>{m.qty>=0?"+":""}{m.qty}</span></div>)}</div>
 {(()=>{const live=d.references.find(x=>x.id===dt.id)||dt;const user=cu?.nom||"Admin";
 return <div style={{borderTop:`1px solid ${P.bd}`,paddingTop:10,marginTop:10}}>
 <PhotoManager photos={live.photos} dossier="refs" user={user} onChange={(ph,note)=>{const nd={...d,references:d.references.map(x=>x.id===dt.id?{...x,photos:ph,historique:[...(x.historique||[]),{date:new Date().toISOString(),user,note}]}:x)};nd.auditLog=[...(nd.auditLog||[]),{date:new Date().toISOString(),user,role:cu?.role||"admin",module:"Référence",action:`${dt.id} — ${note}`}];sD(nd);}}/>
@@ -684,10 +712,11 @@ else if(v==="Expédié"&&!(r.photos||[]).length){nd.sorties=nd.sorties.map(x=>x.
 else if(v==="Annulé"&&r.stockDecremente){restituerStock(nd,r);nd.sorties=nd.sorties.map(x=>x.id===r.id?{...x,statut:v,stockDecremente:false,scanValide:false}:x);nd.auditLog=[...(nd.auditLog||[]),{date:new Date().toISOString(),user:cu?.nom||"Admin",role:cu?.role||"admin",module:"Sortie",action:`Sortie ${r.id} annulée — ${r.nbBouteilles} btls restituées au stock`}];}
 else{nd.sorties=nd.sorties.map(x=>x.id===r.id?{...x,statut:v}:x);}
 sD(nd);};
-// Get accise for existing sorties
-const getAccise=sortie=>{const refs=Object.keys(sortie.refsDetail||{});const accises=refs.map(refId=>{const ref=d.references.find(r=>r.id===refId);return ref?.droitsAccise;}).filter(Boolean);const hasSusp=accises.some(a=>a==="Droit suspendu");const hasAcq=accises.some(a=>a==="Droit acquitté");if(hasSusp&&hasAcq)return "Mixte";if(hasSusp)return "Suspendu";return "Acquitté";};
+// Get accise for existing sorties (Map construite une fois par rendu : évite un find() par réf et par ligne du tableau)
+const refById=new Map(d.references.map(r=>[r.id,r]));
+const getAccise=sortie=>{const refs=Object.keys(sortie.refsDetail||{});const accises=refs.map(refId=>{const ref=refById.get(refId);return ref?.droitsAccise;}).filter(Boolean);const hasSusp=accises.some(a=>a==="Droit suspendu");const hasAcq=accises.some(a=>a==="Droit acquitté");if(hasSusp&&hasAcq)return "Mixte";if(hasSusp)return "Suspendu";return "Acquitté";};
 
-return <div><div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}><h3 style={{color:P.tx,margin:0}}>Sorties</h3><div style={{display:"flex",gap:6,flexWrap:"wrap"}}><Btn v="secondary" sm onClick={()=>exportCSV(`sorties_${dateTag()}.csv`,["N°","Date","Adhérent","Btls","Réfs","Colis","Colisage","Destinataire","Transport PA","Assurance PA","Statut","Picking validé","Montant HT","Relevé"],filteredSorties.map(x=>[x.id,x.date,d.adherents.find(a=>a.id===x.adherentId)?.name||x.adherentId,x.nbBouteilles,x.nbRefs,x.nbColis,x.colisageDetail||"",x.destinataire||"",x.tpa?"OUI":"NON",x.apa?"OUI":"NON",x.statut,x.scanValide?"OUI":"NON",(x.montant||0).toFixed(2),x.factureNum||""]))}>⬇️ Export</Btn><Btn v="secondary" sm onClick={()=>{setDaOpen(true);setDaDrafts([]);}}>📄 Import DA</Btn><Btn onClick={()=>sSh(true)}>+ Sortie</Btn></div></div>
+return <div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,marginBottom:14}}><h3 style={{color:P.tx,margin:0}}>Sorties</h3><div style={{display:"flex",gap:6,flexWrap:"wrap"}}><Btn v="secondary" sm onClick={()=>exportCSV(`sorties_${dateTag()}.csv`,["N°","Date","Adhérent","Btls","Réfs","Colis","Colisage","Destinataire","Transport PA","Assurance PA","Statut","Picking validé","Montant HT","Relevé"],filteredSorties.map(x=>[x.id,x.date,d.adherents.find(a=>a.id===x.adherentId)?.name||x.adherentId,x.nbBouteilles,x.nbRefs,x.nbColis,x.colisageDetail||"",x.destinataire||"",x.tpa?"OUI":"NON",x.apa?"OUI":"NON",x.statut,x.scanValide?"OUI":"NON",(x.montant||0).toFixed(2),x.factureNum||""]))}>⬇️ Export</Btn><Btn v="secondary" sm onClick={()=>{setDaOpen(true);setDaDrafts([]);}}>📄 Import DA</Btn><Btn onClick={()=>sSh(true)}>+ Sortie</Btn></div></div>
 <Card style={{marginBottom:12,padding:"12px 16px"}}>
 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}>
 <Inp label="🔎 Recherche" value={qS} onChange={sqS} placeholder="N°, destinataire, commentaire..." sm/>
@@ -712,7 +741,7 @@ return <div><div style={{display:"flex",justifyContent:"space-between",marginBot
 {key:"accise",label:"Accise",render:r=>{const a=getAccise(r);return <Badge color={a==="Suspendu"?"am":a==="Mixte"?"rd":"gn"}>{a}</Badge>;}},
 {key:"montant",label:"€ HT",render:r=>`${r.montant.toFixed(2)}`},
 {key:"scanValide",label:"Scan",render:r=>r.scanValide?<Badge color="gn">✅</Badge>:<Btn v="danger" sm onClick={e=>{e.stopPropagation();sScan(r);}}>🔍</Btn>},
-{key:"statut",label:"Statut",render:r=><select value={r.statut} onChange={e=>{e.stopPropagation();changeStatut(r,e.target.value);}} onClick={e=>e.stopPropagation()} style={{background:P.bg,color:P.tx,border:`1px solid ${P.bd}`,borderRadius:6,padding:"3px 8px",fontSize:11}}><option>En préparation</option><option>Prêt</option><option>Expédié</option><option>Annulé</option></select>},
+{key:"statut",label:"Statut",render:r=><select value={r.statut} onChange={e=>{e.stopPropagation();changeStatut(r,e.target.value);}} onClick={e=>e.stopPropagation()} style={{background:P.bg,color:P.tx,border:`1px solid ${P.bd}`,borderRadius:6,padding:"8px",fontSize:12,minHeight:36}}><option>En préparation</option><option>Prêt</option><option>Expédié</option><option>Annulé</option></select>},
 {key:"f",label:"",render:r=>{const fc=d.factures.find(x=>x.numero===r.factureNum);return fc?<Btn v="ghost" sm onClick={e=>{e.stopPropagation();sVF(fc);}}>🧾</Btn>:null;}},
 {key:"ph",label:"📷",render:r=>(r.photos||[]).length||""},
 {key:"edit",label:"",render:r=><Btn v="ghost" sm onClick={e=>{e.stopPropagation();sEdS(r);sEsf({date:r.date,destinataire:r.destinataire||"",commentaire:r.commentaire||""});}}>✏️</Btn>}
@@ -898,7 +927,7 @@ Dans <b>combien de cartons</b> cette commande part-elle réellement ? La proposi
 {f.adherentId&&adhRefs.length>0&&<div><div style={{fontSize:10,color:P.tm,fontWeight:600,marginBottom:6}}>SÉLECTION RÉFÉRENCES</div>{adhRefs.map(r=><div key={r.id} style={{display:"flex",alignItems:"center",gap:8,background:P.bg,padding:"7px 8px",borderRadius:6,marginBottom:3}}>
 <QRCode refId={r.id} size={24}/>
 <div style={{flex:1,fontSize:12}}><b>{r.designation}</b><span style={{color:P.tm,marginLeft:6,fontSize:10}}>Stock: {r.stockActuel}</span><span style={{marginLeft:6}}><Badge color={r.droitsAccise==="Droit suspendu"?"am":"gn"}>{r.droitsAccise==="Droit suspendu"?"Susp.":"Acq."}</Badge></span></div>
-<input type="number" min="0" max={r.stockActuel} value={f.refsSelected[r.id]||""} onChange={e=>{const v=Math.min(+e.target.value,r.stockActuel);sF({...f,refsSelected:{...f.refsSelected,[r.id]:v>0?String(v):""}});}} style={{width:60,background:P.sf,color:P.tx,border:`1px solid ${P.bd}`,borderRadius:4,padding:"3px 6px",fontSize:12,textAlign:"center"}} placeholder="0"/>
+<input type="number" min="0" max={r.stockActuel} value={f.refsSelected[r.id]||""} onChange={e=>{const v=Math.min(+e.target.value,r.stockActuel);sF({...f,refsSelected:{...f.refsSelected,[r.id]:v>0?String(v):""}});}} style={{width:64,background:P.sf,color:P.tx,border:`1px solid ${P.bd}`,borderRadius:6,padding:"9px 4px",fontSize:15,textAlign:"center",fontWeight:600}} placeholder="0"/>
 </div>)}</div>}
 
 {selectedAccise.length>0&&<div style={{background:P.bg,borderRadius:8,padding:10}}><div style={{fontSize:10,color:P.tm,fontWeight:600,marginBottom:4}}>DROITS D'ACCISE</div>{selectedAccise.map(a=><div key={a.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"3px 0"}}><span>{a.designation}</span><Badge color={a.accise==="Droit suspendu"?"am":"gn"}>{a.accise}</Badge></div>)}</div>}
@@ -906,7 +935,7 @@ Dans <b>combien de cartons</b> cette commande part-elle réellement ? La proposi
 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:8}}><Inp label="Colisage" value={f.colType} options={["Colis","Palette"]} onChange={v=>sF({...f,colType:v,colis:[]})} sm/><Inp label="Transport PA" value={f.tpa?"OUI":"NON"} options={["OUI","NON"]} onChange={v=>sF({...f,tpa:v==="OUI"})} sm/><Inp label="Assurance PA" value={f.apa?"OUI":"NON"} options={["OUI","NON"]} onChange={v=>sF({...f,apa:v==="OUI"})} sm/></div>
 
 <div style={{background:P.bg,borderRadius:8,padding:10}}><div style={{fontSize:10,color:P.tm,fontWeight:600,marginBottom:6}}>COLISAGE DÉTAILLÉ</div><div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:6}}>{COLIS_FORMATS.filter(cf=>isPal?(cf.id==="PAL"||cf.id==="DPAL"):(cf.id!=="PAL"&&cf.id!=="DPAL")).map(cf=><Btn key={cf.id} v="secondary" sm onClick={()=>addColis(cf.id)}>+ {cf.label}</Btn>)}</div>
-{f.colis.map((c,i)=>{const fmt=COLIS_FORMATS.find(x=>x.id===c.format);return <div key={i} style={{display:"flex",alignItems:"center",gap:6,background:P.sf,padding:"4px 8px",borderRadius:4,marginBottom:3}}><span style={{flex:1,fontSize:11,fontWeight:600}}>{fmt?.label}</span><input type="number" min="0" value={c.qty} onChange={e=>{const nc=[...f.colis];nc[i]={...nc[i],qty:Math.max(0,+e.target.value)};sF({...f,colis:nc});}} style={{width:45,background:P.bg,color:P.tx,border:`1px solid ${P.bd}`,borderRadius:4,padding:"2px 4px",fontSize:12,textAlign:"center"}}/><Btn v="danger" sm onClick={()=>sF({...f,colis:f.colis.filter((_,j)=>j!==i)})}>✕</Btn></div>;})}
+{f.colis.map((c,i)=>{const fmt=COLIS_FORMATS.find(x=>x.id===c.format);return <div key={i} style={{display:"flex",alignItems:"center",gap:6,background:P.sf,padding:"4px 8px",borderRadius:4,marginBottom:3}}><span style={{flex:1,fontSize:11,fontWeight:600}}>{fmt?.label}</span><input type="number" min="0" value={c.qty} onChange={e=>{const nc=[...f.colis];nc[i]={...nc[i],qty:Math.max(0,+e.target.value)};sF({...f,colis:nc});}} style={{width:58,background:P.bg,color:P.tx,border:`1px solid ${P.bd}`,borderRadius:6,padding:"9px 4px",fontSize:15,textAlign:"center",fontWeight:600}}/><Btn v="danger" sm onClick={()=>sF({...f,colis:f.colis.filter((_,j)=>j!==i)})}>✕</Btn></div>;})}
 {f.colis.length>0&&<div style={{fontSize:10,color:P.tm,marginTop:4}}>Total: <b style={{color:P.tx}}>{totalColis} colis</b>{facFour&&<span> — Fournitures: <b style={{color:P.am}}>{fourCost.toFixed(2)} €</b></span>}</div>}
 {f.colType==="Colis"&&totalBtls>0&&<div style={{marginTop:6,padding:"8px 10px",borderRadius:8,background:capaciteColis<totalBtls?P.rds:videsColis>0?P.ams:P.gns,border:`1px solid ${capaciteColis<totalBtls?P.rd:videsColis>0?P.am:P.gn}40`}}>
 <div style={{fontSize:11,fontWeight:600,color:capaciteColis<totalBtls?P.rd:videsColis>0?P.am:P.gn}}>
@@ -921,7 +950,7 @@ Dans <b>combien de cartons</b> cette commande part-elle réellement ? La proposi
 </div>
 
 <Inp label="Commentaire" value={f.commentaire} onChange={v=>sF({...f,commentaire:v})}/>
-<Card style={{background:P.acs,border:`1px solid ${P.acb}`}}><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,textAlign:"center"}}><div><div style={{fontSize:9,color:P.tm}}>Btls</div><div style={{fontSize:16,fontWeight:700}}>{totalBtls}</div></div><div><div style={{fontSize:9,color:P.tm}}>Réfs</div><div style={{fontSize:16,fontWeight:700}}>{nbRefsSelected}</div></div><div><div style={{fontSize:9,color:P.tm}}>Colis</div><div style={{fontSize:16,fontWeight:700}}>{totalColis}</div></div><div><div style={{fontSize:9,color:P.tm}}>Montant HT</div><div style={{fontSize:16,fontWeight:700,color:P.ac}}>{(mt+(facFour?fourCost:0)).toFixed(2)} €</div></div></div></Card>
+<Card style={{background:P.acs,border:`1px solid ${P.acb}`}}><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:6,textAlign:"center"}}><div><div style={{fontSize:9,color:P.tm}}>Btls</div><div style={{fontSize:16,fontWeight:700}}>{totalBtls}</div></div><div><div style={{fontSize:9,color:P.tm}}>Réfs</div><div style={{fontSize:16,fontWeight:700}}>{nbRefsSelected}</div></div><div><div style={{fontSize:9,color:P.tm}}>Colis</div><div style={{fontSize:16,fontWeight:700}}>{totalColis}</div></div><div><div style={{fontSize:9,color:P.tm}}>Montant HT</div><div style={{fontSize:16,fontWeight:700,color:P.ac}}>{(mt+(facFour?fourCost:0)).toFixed(2)} €</div></div></div></Card>
 <Btn onClick={doSave} dis={!f.adherentId||totalBtls===0||!colisOk}>{!colisOk&&totalBtls>0?"⛔ Colisage incomplet":"Confirmer la sortie"}</Btn>
 </div></Modal>}
 
@@ -1029,7 +1058,7 @@ return <div><div style={{display:"flex",justifyContent:"space-between",alignItem
 
 <div style={{display:"flex",gap:10,marginBottom:10,alignItems:"flex-end",flexWrap:"wrap"}}>
 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{["Tous","Mensuelle","Entrée","Sortie","Stockage"].map(t=><Btn key={t} v={fl===t?"primary":"secondary"} sm onClick={()=>sFl(t)}>{t==="Mensuelle"?"💶 "+t:t}</Btn>)}</div>
-<div style={{display:"flex",gap:6}}>{["Tous","En attente","Validée","Rejetée"].map(s=><Btn key={s} v={fS===s?"primary":"secondary"} sm onClick={()=>sfS(s)} style={s==="En attente"&&pendingCount>0?{background:P.ams,color:P.am,border:`1px solid ${P.am}40`}:{}}>{s==="En attente"?`⏳ En attente${pendingCount>0?` (${pendingCount})`:""}`:(s==="Validée"?"✅ Validé":s==="Rejetée"?"❌ Rejeté":s)}</Btn>)}</div>
+<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{["Tous","En attente","Validée","Rejetée"].map(s=><Btn key={s} v={fS===s?"primary":"secondary"} sm onClick={()=>sfS(s)} style={s==="En attente"&&pendingCount>0?{background:P.ams,color:P.am,border:`1px solid ${P.am}40`}:{}}>{s==="En attente"?`⏳ En attente${pendingCount>0?` (${pendingCount})`:""}`:(s==="Validée"?"✅ Validé":s==="Rejetée"?"❌ Rejeté":s)}</Btn>)}</div>
 <Inp label="Adhérent" value={fA} options={[{value:"",label:"— Tous —"},...d.adherents.map(a=>({value:a.id,label:a.name}))]} onChange={sfA} sm/>
 </div>
 
@@ -1122,14 +1151,17 @@ return <div style={{marginTop:10}}>
 // ─── VUE 3D RÉALISTE DE L'ENTREPÔT (three.js / WebGL) ───
 function Espaces3D({espaces,references,onSelect,selected}){
 const mountRef=useRef(null);
+// La sélection ne reconstruit pas la scène (coûteux) : le halo est déplacé via cette
+// petite API, alimentée par l'effet dédié [selected] plus bas.
+const apiRef=useRef(null);const selectedRef=useRef(selected);
 useEffect(()=>{
-let disposed=false,renderer,scene,camera,controls,raf;
+let disposed=false,renderer,scene,camera,controls,raf,ro;
 (async()=>{
 const THREE=await import("three");
 const{OrbitControls}=await import("three/examples/jsm/controls/OrbitControls.js");
 if(disposed||!mountRef.current)return;
 const mount=mountRef.current;mount.innerHTML="";
-const W=mount.clientWidth||800,H=470;
+const W=mount.clientWidth||800,H=mount.clientHeight||470;
 renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(W,H);renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
@@ -1137,6 +1169,8 @@ mount.appendChild(renderer.domElement);
 scene=new THREE.Scene();scene.background=new THREE.Color(0xeef3f8);
 scene.fog=new THREE.Fog(0xeef3f8,600,1600);
 camera=new THREE.PerspectiveCamera(42,W/H,0.5,3000);
+// Suivi de la taille du conteneur (rotation du téléphone, redimensionnement de fenêtre)
+ro=new ResizeObserver(()=>{if(disposed)return;const w=mount.clientWidth||W,h=mount.clientHeight||H;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();});ro.observe(mount);
 scene.add(new THREE.AmbientLight(0xffffff,0.75));
 const sun=new THREE.DirectionalLight(0xffffff,1.1);sun.position.set(160,260,140);sun.castShadow=true;
 sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-400;sun.shadow.camera.right=400;sun.shadow.camera.top=400;sun.shadow.camera.bottom=-400;
@@ -1168,7 +1202,8 @@ const floor=new THREE.Mesh(new THREE.PlaneGeometry(3000,3000),M.floor);floor.rot
 const grid=new THREE.GridHelper(3000,100,0xc9d4e0,0xdde5ee);grid.position.y=0;scene.add(grid);
 // Construction des racks
 const SLOT_W=34,SLOT_D=30,SHELF_H=26,BOARD_T=1.6;
-const clickables=[];const root=new THREE.Group();scene.add(root);
+const clickables=[];const slotById=new Map();const root=new THREE.Group();scene.add(root);
+const hlMesh=new THREE.Mesh(new THREE.BoxGeometry(SLOT_W-3,SHELF_H-5,SLOT_D-1),M.sel);hlMesh.visible=false;hlMesh.position.y=(SHELF_H-5)/2;
 let zoneX=0;
 espaces.forEach(zone=>{
 const nSlots=Math.max(1,...zone.rangs.map(r=>r.emplacements.length),1);
@@ -1192,9 +1227,7 @@ const btls=refsHere.reduce((s,x)=>s+(x.stockActuel||0),0);
 const slot=new THREE.Group();slot.position.set(sx,y+BOARD_T/2,0);zg.add(slot);
 // Zone cliquable invisible
 const hit=new THREE.Mesh(new THREE.BoxGeometry(SLOT_W-2,SHELF_H-4,SLOT_D),new THREE.MeshBasicMaterial({visible:false}));
-hit.position.y=(SHELF_H-4)/2;hit.userData.empId=e.id;slot.add(hit);clickables.push(hit);
-// Surbrillance de sélection
-if(selected===e.id){const hl=new THREE.Mesh(new THREE.BoxGeometry(SLOT_W-3,SHELF_H-5,SLOT_D-1),M.sel);hl.position.y=(SHELF_H-5)/2;slot.add(hl);}
+hit.position.y=(SHELF_H-4)/2;hit.userData.empId=e.id;slot.add(hit);clickables.push(hit);slotById.set(e.id,slot);
 if(e.cond==="Espace 12 btls"){
 // Bouteilles individuelles debout (grille 4×3), couleur selon le vin
 let placed=0;
@@ -1241,11 +1274,16 @@ if(hits.length)onSelect(hits[0].object.userData.empId);
 downPos=null;});
 const animate=()=>{if(disposed)return;raf=requestAnimationFrame(animate);controls.update();renderer.render(scene,camera);};
 animate();
-})();
-return()=>{disposed=true;if(raf)cancelAnimationFrame(raf);try{controls?.dispose();}catch{}try{renderer?.dispose();renderer?.domElement?.remove();}catch{}};
-},[espaces,references,selected]);
+apiRef.current={select:id=>{const s=id&&slotById.get(id);if(!s){hlMesh.visible=false;if(hlMesh.parent)hlMesh.parent.remove(hlMesh);return;}s.add(hlMesh);hlMesh.visible=true;}};
+apiRef.current.select(selectedRef.current);
+})().catch(()=>{if(!disposed&&mountRef.current)mountRef.current.innerHTML="<div style='padding:40px 16px;text-align:center;color:#64748b;font-size:12px'>⚠️ Impossible de charger la vue 3D sur cet appareil — utilisez la vue Liste</div>";});
+return()=>{disposed=true;apiRef.current=null;if(raf)cancelAnimationFrame(raf);try{ro?.disconnect();}catch{}try{controls?.dispose();}catch{}try{renderer?.dispose();renderer?.domElement?.remove();}catch{}};
+},[espaces,references]);
+useEffect(()=>{selectedRef.current=selected;apiRef.current?.select(selected);},[selected]);
 return <div>
-<div ref={mountRef} style={{width:"100%",height:470,borderRadius:12,overflow:"hidden",touchAction:"none",background:"#eef3f8"}}/>
+<div ref={mountRef} style={{width:"100%",height:"min(470px, 62vh)",minHeight:300,borderRadius:12,overflow:"hidden",touchAction:"none",background:"#eef3f8"}}>
+<div style={{paddingTop:110,textAlign:"center",color:"#64748b",fontSize:12}}><div className="pa-spin"/>Chargement de la vue 3D…</div>
+</div>
 <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap",fontSize:11,color:P.tm,marginTop:8}}>
 <span>🍷 Bouteilles individuelles (couleur = type de vin)</span>
 <span>📦 Palettes avec cartons empilés</span>
@@ -1254,16 +1292,16 @@ return <div>
 </div>;}
 
 function Espaces({data:d,setData:sD,currentUser:cu}){const[nz,snz]=useState("");const[nr,snr]=useState({z:"",n:""});const[ne,sne]=useState({z:"",r:"",n:"",c:"Palette"});const[vue,setVue]=useState("liste");const[selEmp,setSelEmp]=useState(null);
-const allE=[];d.espaces.forEach(z=>z.rangs.forEach(r=>r.emplacements.forEach(e=>allE.push({...e,zone:z.nom,rang:r.nom}))));
-const refsAt=id=>d.references.filter(x=>x.emplacement===id&&(x.stockActuel||0)>0);
-const occ=allE.filter(e=>refsAt(e.id).length>0).length;
+const allE=useMemo(()=>{const a=[];d.espaces.forEach(z=>z.rangs.forEach(r=>r.emplacements.forEach(e=>a.push({...e,zone:z.nom,rang:r.nom}))));return a;},[d.espaces]);
+const refsAt=useCallback(id=>d.references.filter(x=>x.emplacement===id&&(x.stockActuel||0)>0),[d.references]);
+const occ=useMemo(()=>allE.filter(e=>refsAt(e.id).length>0).length,[allE,refsAt]);
 const rFor=ne.z?d.espaces.find(z=>z.id===ne.z)?.rangs||[]:[];
 const user=cu?.nom||"Admin";
 // Réfs en stock sans emplacement valide (texte libre ou vide) → affectation rapide
 const empIds=new Set(allE.map(e=>e.id));
 const orphelines=d.references.filter(r=>(r.stockActuel||0)>0&&(!r.emplacement||!empIds.has(r.emplacement)));
-const eOpts=allE.map(e=>{const rh=refsAt(e.id);const btls=rh.reduce((s,x)=>s+(x.stockActuel||0),0);const cap=e.cond==="Espace 12 btls"?12:null;
-return{value:e.id,label:`${e.zone} › ${e.rang} › ${e.nom} (${e.cond}) ${rh.length===0?"✅ libre":cap?`${btls}/${cap}`:"⛔ occupé"}`};});
+const eOpts=useMemo(()=>allE.map(e=>{const rh=refsAt(e.id);const btls=rh.reduce((s,x)=>s+(x.stockActuel||0),0);const cap=e.cond==="Espace 12 btls"?12:null;
+return{value:e.id,label:`${e.zone} › ${e.rang} › ${e.nom} (${e.cond}) ${rh.length===0?"✅ libre":cap?`${btls}/${cap}`:"⛔ occupé"}`};}),[allE,refsAt]);
 const affecter=(refId,empId)=>{if(!empId)return;const r=d.references.find(x=>x.id===refId);const lbl=eOpts.find(o=>o.value===empId)?.label||empId;
 const nd={...d,references:d.references.map(x=>x.id===refId?{...x,emplacement:empId,historique:[...(x.historique||[]),{date:new Date().toISOString(),user,changes:[{champ:"Emplacement",avant:r?.emplacement||"—",apres:lbl}]}]}:x),
 auditLog:[...(d.auditLog||[]),{date:new Date().toISOString(),user,role:cu?.role||"admin",module:"Espaces",action:`${refId} affectée à l'emplacement ${lbl}`}]};sD(nd);};
@@ -1283,7 +1321,7 @@ return <div><div style={{display:"flex",justifyContent:"space-between",alignItem
 </div>)}
 </Card>}
 
-{vue==="3d"&&allE.length>0&&<Card style={{marginBottom:14,overflow:"hidden"}}><Espaces3D espaces={d.espaces} references={d.references} onSelect={id=>setSelEmp(id===selEmp?null:id)} selected={selEmp}/></Card>}
+{vue==="3d"&&allE.length>0&&<Card style={{marginBottom:14,overflow:"hidden"}}><Espaces3D espaces={d.espaces} references={d.references} onSelect={id=>setSelEmp(prev=>prev===id?null:id)} selected={selEmp}/></Card>}
 {selInfo&&(()=>{const rh=refsAt(selInfo.id);const btls=rh.reduce((s,x)=>s+(x.stockActuel||0),0);const cap=selInfo.cond==="Espace 12 btls"?12:null;
 return <Card style={{marginBottom:14,borderLeft:`4px solid ${P.ac}`}}>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,gap:8}}>
@@ -1309,7 +1347,7 @@ return <div key={e.id} onClick={()=>setSelEmp(e.id===selEmp?null:e.id)} style={{
 
 function GrilleTarifaire({data:d,setData:sD}){const[sel,sSel]=useState("");const adh=d.adherents.find(a=>a.id===sel);const upd=(k,v)=>{sD({...d,adherents:d.adherents.map(a=>a.id===sel?{...a,grille:{...a.grille,[k]:+v}}:a)});};
 const sections=[{s:"ENTRÉE",f:[{k:"entree_forfait_palette",l:"Forfait palette",u:"€ HT"},{k:"entree_par_palette_mono",l:"Par palette mono-réf",u:"€ HT / pal."},{k:"entree_par_ref_multi",l:"Par référence multi-réf",u:"€ HT / réf"},{k:"entree_colis_gratuits",l:"Seuil colis gratuits",u:"colis"},{k:"entree_par_colis_payant",l:"Par colis payant",u:"€ HT / colis"},{k:"entree_par_ref_colis",l:"Par référence (colis)",u:"€ HT / réf"}]},{s:"STOCKAGE MENSUEL",f:[{k:"stock_palette_demi",l:"Palette demi-mois (≤15j)",u:"€ HT / pal."},{k:"stock_palette_mois",l:"Palette mois complet",u:"€ HT / pal."},{k:"stock_espace12",l:"Espace 12 bouteilles",u:"€ HT / espace"}]},{s:"SORTIE",f:[{k:"sortie_picking_lot6",l:"Picking par lot de 6",u:"€ HT / lot"},{k:"sortie_min_prepa_colis",l:"Prépa par colis (remplace le picking si cartons > nécessaire)",u:"€ HT / colis"},{k:"sortie_colis_ref_tpa_oui",l:"Sortie réf (T PA=OUI)",u:"€ HT / réf"},{k:"sortie_colis_ref_tpa_non",l:"Sortie réf (T PA=NON)",u:"€ HT / réf"},{k:"sortie_picking_palette_mono",l:"Picking pal. mono-réf",u:"€ HT / pal."},{k:"sortie_picking_palette_multi",l:"Picking pal. multi-réf",u:"€ HT / réf"},{k:"sortie_prepa_palette",l:"Prépa palette (film…)",u:"€ HT / pal."},{k:"sortie_manut_palette",l:"Manutention",u:"€ HT / sortie"}]}];
-return <div><h3 style={{color:P.tx,margin:"0 0 14px"}}>Grille Tarifaire</h3><Inp label="Adhérent" value={sel} options={d.adherents.filter(a=>a.stockageActif).map(a=>({value:a.id,label:a.name}))} onChange={sSel}/>{adh&&<div style={{display:"grid",gap:12,marginTop:14}}>{sections.map(sc=><Card key={sc.s}><div style={{fontSize:11,fontWeight:700,color:P.ac,marginBottom:10}}>{sc.s}</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:8}}>{sc.f.map(fi=><div key={fi.k} style={{display:"flex",flexDirection:"column",gap:3}}><label style={{fontSize:10,color:P.tm,fontWeight:600}}>{fi.l}</label><div style={{display:"flex",gap:4,alignItems:"center"}}><input type="number" value={adh.grille[fi.k]} onChange={e=>upd(fi.k,e.target.value)} style={{flex:1,fontFamily:FN,fontSize:13,background:P.bg,color:P.tx,border:`1px solid ${P.bd}`,borderRadius:6,padding:"7px 10px",outline:"none"}}/><span style={{fontSize:9,color:P.tm,whiteSpace:"nowrap",minWidth:60}}>{fi.u}</span></div></div>)}</div></Card>)}</div>}</div>;}
+return <div><h3 style={{color:P.tx,margin:"0 0 14px"}}>Grille Tarifaire</h3><Inp label="Adhérent" value={sel} options={d.adherents.filter(a=>a.stockageActif).map(a=>({value:a.id,label:a.name}))} onChange={sSel}/>{adh&&<div style={{display:"grid",gap:12,marginTop:14}}>{sections.map(sc=><Card key={sc.s}><div style={{fontSize:11,fontWeight:700,color:P.ac,marginBottom:10}}>{sc.s}</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:8}}>{sc.f.map(fi=><div key={fi.k} style={{display:"flex",flexDirection:"column",gap:3}}><label style={{fontSize:10,color:P.tm,fontWeight:600}}>{fi.l}</label><div style={{display:"flex",gap:4,alignItems:"center"}}><input type="number" key={sel+fi.k} defaultValue={adh.grille[fi.k]} onBlur={e=>{if(e.target.value!==""&&e.target.value!==String(adh.grille[fi.k]))upd(fi.k,e.target.value);}} style={{flex:1,fontFamily:FN,fontSize:13,background:P.bg,color:P.tx,border:`1px solid ${P.bd}`,borderRadius:6,padding:"7px 10px",outline:"none"}}/><span style={{fontSize:9,color:P.tm,whiteSpace:"nowrap",minWidth:60}}>{fi.u}</span></div></div>)}</div></Card>)}</div>}</div>;}
 
 // ─── ESPACE ADHÉRENT ───
 function EspaceAdherent({data:d,forcedId}){const[sel,sSel]=useState(forcedId||"");const[vF,sVF]=useState(null);const[subTab,setSub]=useState("stock");
@@ -1355,8 +1393,8 @@ return <div>
 <Stat label="Total prestations TTC" value={`${tCA.toFixed(0)} €`} icon="💰" color="gn"/>
 </div>
 
-{/* Sub-tabs */}
-<div style={{display:"flex",gap:5,marginBottom:14,flexWrap:"wrap"}}>{subTabs.map(st=><Btn key={st.id} v={subTab===st.id?"primary":"secondary"} sm onClick={()=>setSub(st.id)}>{st.icon} {st.label}</Btn>)}</div>
+{/* Sub-tabs : défilement horizontal sur mobile plutôt qu'un empilement sur 3 lignes */}
+<div className="pa-subtabs" style={{marginBottom:14}}>{subTabs.map(st=><Btn key={st.id} v={subTab===st.id?"primary":"secondary"} sm onClick={()=>setSub(st.id)}>{st.icon} {st.label}</Btn>)}</div>
 
 {/* ─── MON STOCK ─── */}
 {subTab==="stock"&&<Card>
@@ -1541,7 +1579,7 @@ stockDebutHL:btlToHL(stockDebut),entreesHL:btlToHL(entreesBtl),sortiesHL:btlToHL
 });
 return result;};
 
-const drmData=computeDRM(mois);
+const drmData=useMemo(()=>computeDRM(mois),[d.references,d.comptaMatiere,mois]);// eslint-disable-line react-hooks/exhaustive-deps
 const totalBtlsSusp=d.references.filter(r=>r.droitsAccise==="Droit suspendu").reduce((s,r)=>s+(r.stockActuel||0),0);
 const totalBtlsAcq=d.references.filter(r=>r.droitsAccise==="Droit acquitté").reduce((s,r)=>s+(r.stockActuel||0),0);
 const totalPertes=pertes.reduce((s,p)=>s+Math.abs(p.qte),0);
@@ -1589,7 +1627,7 @@ return <Card key={regime} style={{marginBottom:12,borderLeft:`4px solid ${isSusp
 </div>;
 
 const renderDRM=()=><div>
-<div style={{display:"flex",gap:10,alignItems:"flex-end",marginBottom:16}}>
+<div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap",marginBottom:16}}>
 <Inp label="Période (mois)" type="month" value={mois} onChange={setMois} style={{maxWidth:200}}/>
 <div style={{fontSize:11,color:P.tm,paddingBottom:10}}>DRM à transmettre via <b>CIEL</b> avant le 10 du mois suivant</div><Btn v="secondary" sm onClick={()=>printDRM(mois,drmData)}>🖨️ Imprimer / PDF</Btn><Btn v="secondary" sm onClick={()=>exportCSV(`drm_${mois}.csv`,["Régime","Ligne","Bouteilles","Hectolitres"],drmData.flatMap(dr=>[[dr.regime,"Stock début",dr.stockDebut,dr.stockDebutHL],[dr.regime,"Entrées",dr.entreesBtl,dr.entreesHL],[dr.regime,"Sorties",-dr.sortiesBtl,-dr.sortiesHL],[dr.regime,"Pertes",-dr.pertesBtl,-dr.pertesHL],[dr.regime,"Stock fin",dr.stockFin,dr.stockFinHL]]))}>⬇️ Export</Btn>
 </div>
@@ -1624,7 +1662,7 @@ const renderDRM=()=><div>
 </div>;
 
 const renderDocs=()=><div>
-<div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,marginBottom:14}}>
 <h4 style={{color:P.tx,margin:0}}>Documents d'accompagnement & Apurement</h4>
 <Btn sm onClick={()=>setShowDAE(true)}>+ Document</Btn>
 </div>
@@ -1637,7 +1675,7 @@ const renderDocs=()=><div>
 {key:"regime",label:"Régime",render:r=><Badge color={r.regime==="Suspension"?"am":"gn"}>{r.regime}</Badge>},
 {key:"statut",label:"Apurement",render:r=>{
 const colors={Apuré:"gn","En cours":"am","Non apuré":"rd"};
-return <select value={r.statut} onChange={e=>{const nd={...d,comptaMatiere:{...d.comptaMatiere,documents:(d.comptaMatiere?.documents||[]).map(dc=>dc.id===r.id?{...dc,statut:e.target.value}:dc)}};sD(nd);}} onClick={e=>e.stopPropagation()} style={{background:P.bg,color:P.tx,border:`1px solid ${P.bd}`,borderRadius:6,padding:"3px 8px",fontSize:11}}><option>En cours</option><option>Apuré</option><option>Non apuré</option></select>;
+return <select value={r.statut} onChange={e=>{const nd={...d,comptaMatiere:{...d.comptaMatiere,documents:(d.comptaMatiere?.documents||[]).map(dc=>dc.id===r.id?{...dc,statut:e.target.value}:dc)}};sD(nd);}} onClick={e=>e.stopPropagation()} style={{background:P.bg,color:P.tx,border:`1px solid ${P.bd}`,borderRadius:6,padding:"8px",fontSize:12,minHeight:36}}><option>En cours</option><option>Apuré</option><option>Non apuré</option></select>;
 }},
 ]} data={docs}/>
 </Card>
@@ -1668,7 +1706,8 @@ return <div>
 const totalTheorique=refsR.reduce((s,r)=>s+(r.stockActuel||0),0);
 return <div key={regime} style={{marginBottom:16}}>
 <div style={{fontSize:12,fontWeight:700,color:P.ac,marginBottom:8}}><Badge color={regime==="Droit suspendu"?"am":"gn"}>{regime}</Badge></div>
-<table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+<div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+<table style={{width:"100%",minWidth:640,borderCollapse:"collapse",fontSize:12}}>
 <thead><tr style={{background:P.bg}}>
 <th style={{padding:"8px 10px",textAlign:"left",borderBottom:`2px solid ${P.bd}`,fontSize:10,color:P.tm}}>Réf</th>
 <th style={{padding:"8px 10px",textAlign:"left",borderBottom:`2px solid ${P.bd}`,fontSize:10,color:P.tm}}>Désignation</th>
@@ -1682,6 +1721,7 @@ return <div key={regime} style={{marginBottom:16}}>
 {refsR.map(r=><tr key={r.id}><td style={{padding:"8px 10px"}}>{r.id}</td><td style={{padding:"8px 10px"}}>{r.designation}</td><td style={{padding:"8px 10px"}}>{r.nomenclature}</td><td style={{padding:"8px 10px",textAlign:"right",fontWeight:600}}>{r.stockActuel}</td><td style={{padding:"8px 10px",textAlign:"right"}}>{(r.stockActuel*0.0075).toFixed(3)}</td><td style={{padding:"8px 10px",textAlign:"right"}}><span style={{color:P.td,fontStyle:"italic"}}>À saisir</span></td><td style={{padding:"8px 10px",textAlign:"right"}}>—</td></tr>)}
 <tr style={{background:P.acs,borderTop:`2px solid ${P.ac}`}}><td colSpan={3} style={{padding:"10px",fontWeight:700}}>TOTAL {regime}</td><td style={{padding:"10px",textAlign:"right",fontWeight:700}}>{totalTheorique}</td><td style={{padding:"10px",textAlign:"right",fontWeight:700}}>{(totalTheorique*0.0075).toFixed(3)}</td><td style={{padding:"10px",textAlign:"right",fontWeight:700}}>—</td><td style={{padding:"10px",textAlign:"right",fontWeight:700}}>—</td></tr>
 </tbody></table>
+</div>
 </div>;})}
 </Card>
 
@@ -1703,7 +1743,7 @@ return <div>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
 <h3 style={{color:P.tx,margin:0}}>⚖️ Comptabilité Matière — Entrepositaire Agréé</h3>
 </div>
-<div style={{display:"flex",gap:6,marginBottom:16}}>{subTabs.map(st=><Btn key={st.id} v={subTab===st.id?"primary":"secondary"} sm onClick={()=>setSub(st.id)}>{st.icon} {st.label}</Btn>)}</div>
+<div className="pa-subtabs" style={{marginBottom:16}}>{subTabs.map(st=><Btn key={st.id} v={subTab===st.id?"primary":"secondary"} sm onClick={()=>setSub(st.id)}>{st.icon} {st.label}</Btn>)}</div>
 
 {subTab==="compte"&&renderCompte()}
 {subTab==="drm"&&renderDRM()}
@@ -1739,13 +1779,15 @@ return <div>
 // ═══ JOURNAL / TRAÇABILITÉ ═══
 function Journal({data:d}){
 const[filtre,setFiltre]=useState("");const[userF,setUserF]=useState("");
-const logs=(d.auditLog||[]).slice().reverse();
-const filtered=logs.filter(l=>{
+// Journal potentiellement long : filtrage mémoïsé et affichage plafonné à 200 lignes
+const logs=useMemo(()=>(d.auditLog||[]).slice().reverse(),[d.auditLog]);
+const filteredAll=useMemo(()=>logs.filter(l=>{
   if(filtre&&!l.action.toLowerCase().includes(filtre.toLowerCase())&&!l.module?.toLowerCase().includes(filtre.toLowerCase()))return false;
   if(userF&&l.user!==userF)return false;
   return true;
-});
-const allUsers=[...new Set(logs.map(l=>l.user).filter(Boolean))];
+}),[logs,filtre,userF]);
+const filtered=filteredAll.slice(0,200);
+const allUsers=useMemo(()=>[...new Set(logs.map(l=>l.user).filter(Boolean))],[logs]);
 return <div>
 <h3 style={{color:P.tx,margin:"0 0 14px"}}>📝 Journal d'activité — Traçabilité</h3>
 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,marginBottom:14}}>
@@ -1755,13 +1797,14 @@ return <div>
 <Card>
 {filtered.length===0?<div style={{padding:20,textAlign:"center",color:P.td,fontSize:13}}>Aucune activité</div>:
 <div style={{maxHeight:500,overflowY:"auto"}}>
-{filtered.map((l,i)=><div key={i} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:`1px solid ${P.bd}30`,fontSize:12}}>
+{filtered.map((l,i)=><div key={i} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:`1px solid ${P.bd}30`,fontSize:12,flexWrap:"wrap"}}>
 <div style={{minWidth:130,color:P.tm,fontSize:10}}>{new Date(l.date).toLocaleString("fr")}</div>
 <div style={{minWidth:90}}><span style={{background:l.role==="admin"?"#3b9abf18":l.role==="logisticien"?"#f59e0b18":"#10b98118",color:l.role==="admin"?P.ac:l.role==="logisticien"?P.am:P.gn,padding:"2px 8px",borderRadius:12,fontSize:10,fontWeight:600}}>{l.user}</span></div>
 <div style={{minWidth:80}}><Badge color={l.module==="Entrée"?"bl":l.module==="Sortie"?"am":l.module==="Référence"?"gn":l.module==="Adhérent"?"ac":"bl"}>{l.module||"—"}</Badge></div>
 <div style={{flex:1,color:P.tx}}>{l.action}</div>
 <div style={{minWidth:60,color:P.tm,fontSize:10}}>{l.ip||"local"}</div>
 </div>)}
+{filteredAll.length>200&&<div style={{padding:"10px 0",fontSize:11,color:P.tm,textAlign:"center"}}>Affichage des 200 entrées les plus récentes sur {filteredAll.length} — affinez avec la recherche ou l'export.</div>}
 </div>}
 </Card>
 </div>;}
@@ -1776,7 +1819,7 @@ const doSave=()=>{if(!f.nom||!f.email||!f.mdp)return;const nd={...d};if(ed){nd.u
 const delUser=u=>{const nd={...d,users:(d.users||[]).filter(x=>x.id!==u.id),auditLog:[...(d.auditLog||[]),{date:new Date().toISOString(),user:cu.nom,role:cu.role,module:"Utilisateurs",action:`Supprimé utilisateur ${u.nom}`}]};sD(nd);};
 const permLabels={entrees:"Entrées",sorties:"Sorties",references:"Références",espaces:"Espaces",facturation:"Relevés",compta:"Compta Matière",grille:"Tarifs"};
 return <div>
-<div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}><h3 style={{color:P.tx,margin:0}}>👥 Gestion Utilisateurs & Accès</h3><Btn onClick={()=>open(null)}>+ Utilisateur</Btn></div>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,marginBottom:14}}><h3 style={{color:P.tx,margin:0}}>👥 Gestion Utilisateurs & Accès</h3><Btn onClick={()=>open(null)}>+ Utilisateur</Btn></div>
 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:10,marginBottom:14}}>
 <Stat label="Administrateurs" value={users.filter(u=>u.role==="admin").length} icon="🔐" color="ac"/>
 <Stat label="Logisticiens" value={users.filter(u=>u.role==="logisticien").length} icon="🏭" color="am"/>
@@ -1881,9 +1924,9 @@ const doLogin=async()=>{
   if(adh){setBusy(false);return onLogin({id:adh.id,nom:adh.name,email:adh.email,role:"adherent",adherentId:adh.id,type:"adherent"});}
   setBusy(false);setErr("Email ou mot de passe incorrect");
 };
-return <div style={{fontFamily:FN,background:P.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+return <div className="pa-root" style={{fontFamily:FN,background:P.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-<div style={{background:P.sf,borderRadius:20,padding:40,maxWidth:400,width:"100%",boxShadow:"0 20px 60px #0002",textAlign:"center",border:`1px solid ${P.bd}`}}>
+<div style={{background:P.sf,borderRadius:20,padding:"min(40px,7vw)",maxWidth:400,width:"100%",boxShadow:"0 20px 60px #0002",textAlign:"center",border:`1px solid ${P.bd}`}}>
 <img src={(d&&d.logo)||LOGO} width={80} height={80} style={{borderRadius:"50%",marginBottom:16,objectFit:"cover"}}/>
 <h2 style={{color:P.ac,margin:"0 0 4px",fontSize:22}}>Planet’Stock</h2>
 <div style={{color:P.tm,fontSize:12,marginBottom:24}}>Gestion de Stock — Connexion</div>
@@ -1903,7 +1946,7 @@ const isAdh=currentUser?.role==="adherent";
 const allowed=ref&&(!isAdh||ref.adherentId===currentUser.adherentId);
 const adh=ref?d.adherents.find(a=>a.id===ref.adherentId):null;
 const al=ref&&ref.alertStock>0&&ref.stockActuel<=ref.alertStock;
-return <div style={{fontFamily:FN,background:P.bg,minHeight:"100vh",padding:14}}>
+return <div className="pa-root" style={{fontFamily:FN,background:P.bg,minHeight:"100vh",padding:14}}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <div style={{maxWidth:540,margin:"0 auto"}}>
 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
@@ -1944,11 +1987,50 @@ return <div style={{fontFamily:FN,background:P.bg,minHeight:"100vh",padding:14}}
 </div>;}
 
 // ═══ MAIN ═══
-const adminTabs=[{id:"dashboard",label:"Dashboard",icon:"📊"},{id:"adherents",label:"Adhérents",icon:"👥"},{id:"entrees",label:"Entrées",icon:"📥"},{id:"references",label:"Références",icon:"🍷"},{id:"sorties",label:"Sorties",icon:"📤"},{id:"espaces",label:"Espaces",icon:"🗄️"},{id:"facturation",label:"Relevés",icon:"🧾"},{id:"compta",label:"Compta Matière",icon:"⚖️"},{id:"grille",label:"Tarifs",icon:"📋"},{id:"journal",label:"Journal",icon:"📝"},{id:"users",label:"Utilisateurs",icon:"🔐"},{id:"reglages",label:"Réglages",icon:"⚙️"},{id:"adherent",label:"Espace Adh.",icon:"👤"}];
+// Styles partagés de tout le module (les styles en ligne ne peuvent pas
+// porter de media query ni de @keyframes) :
+//  - pa-fade / pa-modal : transitions douces, neutralisées si le système
+//    réduit les animations, flou du fond coupé sur téléphone (coûteux) ;
+//  - pa-root : sous 768 px, tous les champs passent à 16 px — en dessous,
+//    iOS Safari zoome la page au focus de chaque champ — et à 38 px de
+//    haut minimum pour le doigt ;
+//  - pa-subtabs : barres de sous-onglets défilantes sans ascenseur ;
+//  - pa-grid2/3/4 : grilles qui se replient sous 640 px.
+const paStyles=<style>{`
+.pa-fade{animation:paFade .18s ease-out}
+@keyframes paFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.pa-modal{animation:paIn .15s ease-out}
+@keyframes paIn{from{opacity:0}}
+@keyframes paSlide{from{transform:translateX(-100%)}}
+.pa-drawer{animation:paSlide .18s ease-out}
+.pa-overlay{animation:paIn .18s ease-out}
+.pa-spin{width:26px;height:26px;border:3px solid #e2e8f0;border-top-color:#2e7fa0;border-radius:50%;animation:paSpin .8s linear infinite;margin:0 auto 10px}
+@keyframes paSpin{to{transform:rotate(360deg)}}
+.pa-tabstrip,.pa-subtabs{scrollbar-width:none}
+.pa-tabstrip::-webkit-scrollbar,.pa-subtabs::-webkit-scrollbar{display:none}
+.pa-subtabs{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.pa-subtabs>*{flex-shrink:0}
+.pa-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pa-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pa-grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:900px){.pa-grid4{grid-template-columns:1fr 1fr}}
+@media(max-width:640px){.pa-grid2,.pa-grid3{grid-template-columns:1fr}}
+@media(max-width:768px){
+.pa-root input,.pa-root select,.pa-root textarea{font-size:16px!important;min-height:38px}
+.pa-modal{backdrop-filter:none!important}
+}
+@media(prefers-reduced-motion:reduce){.pa-fade,.pa-modal,.pa-drawer,.pa-overlay{animation:none}}
+`}</style>;
+
+// Ordre calqué sur le chemin de la marchandise, identique au menu de
+// Planet'Desk (stockNav dans Layout.tsx — les deux doivent rester le
+// miroir l'un de l'autre) : ce que j'ai → ce qui bouge → pour qui → ce
+// que ça coûte.
+const adminTabs=[{id:"dashboard",label:"Dashboard",icon:"📊"},{id:"references",label:"Références",icon:"🍷"},{id:"espaces",label:"Espaces",icon:"🗄️"},{id:"entrees",label:"Entrées",icon:"📥"},{id:"sorties",label:"Sorties",icon:"📤"},{id:"adherents",label:"Adhérents",icon:"👥"},{id:"grille",label:"Tarifs",icon:"📋"},{id:"facturation",label:"Relevés",icon:"🧾"},{id:"compta",label:"Compta Matière",icon:"⚖️"},{id:"journal",label:"Journal",icon:"📝"},{id:"users",label:"Utilisateurs",icon:"🔐"},{id:"reglages",label:"Réglages",icon:"⚙️"},{id:"adherent",label:"Espace Adh.",icon:"👤"}];
 
 const adherentTabs=[{id:"adherent",label:"Mon Espace",icon:"👤"}];
 
-export default function App({session,forcedTab}){const[d,sR]=useState(null);const[tab,sTab]=useState("dashboard");const[ld2,sLd]=useState(true);const[sb,sSb]=useState(true);
+export default function App({session,forcedTab,onTabChange}){const[d,sR]=useState(null);const[tab,sTab]=useState("dashboard");const[ld2,sLd]=useState(true);const[sb,sSb]=useState(true);
 // Session persistée : sur téléphone, on reste connecté entre deux scans de QR code
 const[currentUser,setCurrentUser]=useState(()=>{try{const s=localStorage.getItem("pa-session");return s?JSON.parse(s):null;}catch{return null;}});
 // Route /stock/fiche/REFxxxx (arrivée via scan de QR code)
@@ -1995,6 +2077,17 @@ const allowedTabIds=useMemo(()=>{
 // pourrait ouvrir n'importe quel onglet en modifiant l'URL).
 useEffect(()=>{if(forcedTab&&allowedTabIds.includes(forcedTab))sTab(forcedTab);},[forcedTab,allowedTabIds]);
 
+// Un changement d'onglet passe par l'URL du Desk quand elle pilote la
+// navigation : sans cela, la barre d'onglets mobile et le menu de gauche
+// se désynchronisaient (l'URL gardait l'ancien onglet, qui ne pouvait
+// plus être rouvert).
+const goTab=(id)=>{if(onTabChange)onTabChange(id);else sTab(id);};
+
+// La pastille de l'onglet actif reste visible dans la barre mobile.
+useEffect(()=>{try{document.querySelector(`.pa-tabstrip [data-tab="${tab}"]`)?.scrollIntoView({block:"nearest",inline:"center",behavior:"smooth"});}catch{/* défilement indisponible */}},[tab]);
+// Changer d'onglet ramène en haut de l'écran (fenêtre en mode intégré, conteneur défilant en mode autonome).
+useEffect(()=>{try{window.scrollTo({top:0});document.querySelector(".pa-content")?.scrollTo({top:0});}catch{/* défilement indisponible */}},[tab]);
+
 // Synchro temps réel : adopte les modifications faites sur les autres
 // appareils (ordinateur / téléphone / autres sessions) dès qu'elles arrivent.
 useEffect(()=>{if(ld2)return;const unsub=subscribeSync(nv=>{sR(nv);});return unsub;},[ld2]);
@@ -2039,7 +2132,7 @@ useEffect(()=>{
 // eslint-disable-next-line react-hooks/exhaustive-deps
 },[ld2,d,currentUser,session]);
 
-if(ld2||!d)return <div style={{fontFamily:FN,background:P.bg,color:P.tx,height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{textAlign:"center"}}><img src={LOGO} width={60} height={60} style={{borderRadius:"50%",marginBottom:10}}/><div style={{fontSize:13,color:P.tm}}>Chargement...</div></div></div>;
+if(ld2||!d)return <div className="pa-root" style={{fontFamily:FN,background:P.bg,color:P.tx,minHeight:session?"40vh":"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>{paStyles}<div style={{textAlign:"center"}}><img src={LOGO} width={60} height={60} style={{borderRadius:"50%",marginBottom:10}}/><div className="pa-spin"/><div style={{fontSize:13,color:P.tm}}>Chargement...</div></div></div>;
 
 // Not logged in → show login
 if(!currentUser&&session)return <div style={{fontFamily:FN,background:P.bg,minHeight:"60vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><div style={{background:P.sf,borderRadius:16,padding:32,maxWidth:420,textAlign:"center",border:`1px solid ${P.bd}`}}><div style={{fontSize:32,marginBottom:8}}>🔒</div><div style={{fontWeight:700,color:P.tx,marginBottom:6}}>Accès Planet'Stock non configuré</div><div style={{fontSize:13,color:P.tm,lineHeight:1.5}}>Votre compte Planet'Desk ({session.email}) n'est relié à aucun profil du stock. Demandez à votre administrateur de définir vos droits : Administration → votre compte → « Accès Planet'Stock ».</div></div></div>;
@@ -2057,15 +2150,15 @@ const perms=currentUser.permissions||{};
 let visibleTabs;
 if(isAdh){visibleTabs=adherentTabs;}
 else if(isAdmin){visibleTabs=adminTabs;}
-else{// logisticien with custom permissions
+else{// logisticien : droits cochés par l'admin, même ordre que le menu Desk
 visibleTabs=[{id:"dashboard",label:"Dashboard",icon:"📊"}];
-if(perms.entrees)visibleTabs.push({id:"entrees",label:"Entrées",icon:"📥"});
 if(perms.entrees)visibleTabs.push({id:"references",label:"Références",icon:"🍷"});
-if(perms.sorties)visibleTabs.push({id:"sorties",label:"Sorties",icon:"📤"});
 if(perms.espaces)visibleTabs.push({id:"espaces",label:"Espaces",icon:"🗄️"});
+if(perms.entrees)visibleTabs.push({id:"entrees",label:"Entrées",icon:"📥"});
+if(perms.sorties)visibleTabs.push({id:"sorties",label:"Sorties",icon:"📤"});
+if(perms.grille)visibleTabs.push({id:"grille",label:"Tarifs",icon:"📋"});
 if(perms.facturation)visibleTabs.push({id:"facturation",label:"Relevés",icon:"🧾"});
 if(perms.compta)visibleTabs.push({id:"compta",label:"Compta Matière",icon:"⚖️"});
-if(perms.grille)visibleTabs.push({id:"grille",label:"Tarifs",icon:"📋"});
 visibleTabs.push({id:"journal",label:"Journal",icon:"📝"});
 }
 
@@ -2093,6 +2186,12 @@ default:return null;}}catch(err){return <Card><div style={{color:P.rd,fontSize:1
 const roleColors={admin:P.ac,logisticien:P.am,adherent:P.gn};
 const roleLabels={admin:"Administrateur",logisticien:"Logisticien",adherent:"Adhérent"};
 
+// Barre d'onglets du mode intégré sur téléphone : un appui pour changer
+// d'écran, sans repasser par le menu du Desk. Les onglets retirés du
+// menu (journal, utilisateurs, réglages, espace adhérent des salariés)
+// n'y figurent pas non plus.
+const stripTabs=visibleTabs.filter(t=>!["journal","users","reglages","adherent"].includes(t.id));
+
 const exp=isMobile?true:sb; // menu toujours déplié dans le tiroir mobile
 const navContent=<>
 <div style={{padding:exp?"16px 14px":"16px 10px",borderBottom:`1px solid ${P.bd}`,display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>isMobile?setDrawer(false):sSb(!sb)}><img src={(d&&d.logo)||LOGO} width={exp?40:32} height={exp?40:32} style={{borderRadius:"50%",flexShrink:0,objectFit:"cover"}}/>{exp&&<div style={{fontWeight:700,fontSize:13,color:P.ac,whiteSpace:"nowrap"}}>Planet’Stock<br/><span style={{fontWeight:400,fontSize:9,color:P.tm}}>by Planet Aura</span></div>}</div>
@@ -2106,34 +2205,39 @@ const navContent=<>
 <div style={{fontSize:9,color:roleColors[currentUser.role],fontWeight:600}}>{roleLabels[currentUser.role]}</div>
 </div>
 </div>
-<button onClick={handleLogout} style={{marginTop:8,width:"100%",background:P.rds,color:P.rd,border:`1px solid ${P.rd}30`,borderRadius:6,padding:"5px 10px",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:FN}}>Déconnexion</button>
+<button onClick={handleLogout} style={{marginTop:8,width:"100%",background:P.rds,color:P.rd,border:`1px solid ${P.rd}30`,borderRadius:6,padding:"9px 10px",minHeight:38,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:FN}}>Déconnexion</button>
 </div>}
 
-<div style={{padding:"6px 0",flex:1,overflowY:"auto"}}>{visibleTabs.map(t=><div key={t.id} onClick={()=>{sTab(t.id);if(isMobile)setDrawer(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:exp?"11px 14px":"9px 12px",cursor:"pointer",background:tab===t.id?P.acs:"transparent",borderLeft:tab===t.id?`3px solid ${P.ac}`:"3px solid transparent",transition:"all .12s"}} onMouseEnter={e=>{if(tab!==t.id)e.currentTarget.style.background=P.sf2;}} onMouseLeave={e=>{if(tab!==t.id)e.currentTarget.style.background="transparent";}}><span style={{fontSize:15,flexShrink:0}}>{t.icon}</span>{exp&&<span style={{fontSize:12,fontWeight:tab===t.id?600:400,color:tab===t.id?P.ac:P.tm,whiteSpace:"nowrap"}}>{t.label}</span>}</div>)}</div>
+<div style={{padding:"6px 0",flex:1,overflowY:"auto"}}>{visibleTabs.map(t=><div key={t.id} onClick={()=>{goTab(t.id);if(isMobile)setDrawer(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:exp?"11px 14px":"9px 12px",cursor:"pointer",background:tab===t.id?P.acs:"transparent",borderLeft:tab===t.id?`3px solid ${P.ac}`:"3px solid transparent",transition:"all .12s"}} onMouseEnter={e=>{if(tab!==t.id)e.currentTarget.style.background=P.sf2;}} onMouseLeave={e=>{if(tab!==t.id)e.currentTarget.style.background="transparent";}}><span style={{fontSize:15,flexShrink:0}}>{t.icon}</span>{exp&&<span style={{fontSize:12,fontWeight:tab===t.id?600:400,color:tab===t.id?P.ac:P.tm,whiteSpace:"nowrap"}}>{t.label}</span>}</div>)}</div>
 {exp&&<div style={{padding:12,borderTop:`1px solid ${P.bd}`,fontSize:8,color:P.td}}>Planet’Stock — © Planet Aura 2026</div>}
 </>;
 
-if(session)return <div style={{fontFamily:FN,background:P.bg,color:P.tx,minHeight:"100vh"}}>
-<div style={{flex:1,overflow:"auto",padding:isMobile?12:24}}><div style={{maxWidth:1120}}><ErrorBoundary key={tab}>{R()}</ErrorBoundary></div></div>
+if(session)return <div className="pa-root" style={{fontFamily:FN,background:P.bg,color:P.tx,minHeight:"100vh"}}>
+{paStyles}
+{isMobile&&stripTabs.length>1&&<div className="pa-tabstrip" style={{position:"sticky",top:52,zIndex:30,display:"flex",gap:6,overflowX:"auto",background:P.bg,borderBottom:`1px solid ${P.bd}`,padding:"8px 10px",WebkitOverflowScrolling:"touch"}}>
+{stripTabs.map(t=><button key={t.id} data-tab={t.id} onClick={()=>goTab(t.id)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,border:`1px solid ${tab===t.id?P.ac:P.bd}`,background:tab===t.id?P.acs:P.sf,color:tab===t.id?P.ac:P.tm,fontWeight:600,fontSize:12,fontFamily:FN,borderRadius:20,padding:"8px 13px",minHeight:40,cursor:"pointer",transition:"all .15s"}}>{t.icon} {t.label}</button>)}
+</div>}
+<div style={{padding:isMobile?12:24}}><div className="pa-fade" key={tab} style={{maxWidth:1440,margin:"0 auto"}}><ErrorBoundary key={tab}>{R()}</ErrorBoundary></div></div>
 </div>;
 
-return <div style={{fontFamily:FN,background:P.bg,color:P.tx,minHeight:"100vh",display:"flex",flexDirection:isMobile?"column":"row"}}>
+return <div className="pa-root" style={{fontFamily:FN,background:P.bg,color:P.tx,minHeight:"100vh",display:"flex",flexDirection:isMobile?"column":"row"}}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+{paStyles}
 {isMobile?<>
 {/* Barre supérieure mobile */}
 <div style={{position:"sticky",top:0,zIndex:100,display:"flex",alignItems:"center",gap:10,background:P.sf,borderBottom:`1px solid ${P.bd}`,padding:"10px 12px",boxShadow:"0 2px 8px #0001"}}>
-<button onClick={()=>setDrawer(true)} style={{background:"transparent",border:"none",fontSize:22,cursor:"pointer",color:P.tx,padding:"2px 6px"}}>☰</button>
+<button onClick={()=>setDrawer(true)} style={{background:"transparent",border:"none",fontSize:22,cursor:"pointer",color:P.tx,padding:"2px 6px",minWidth:44,minHeight:40}}>☰</button>
 <img src={(d&&d.logo)||LOGO} width={30} height={30} style={{borderRadius:"50%",objectFit:"cover"}}/>
 <div style={{fontWeight:700,fontSize:14,color:P.ac,flex:1}}>Planet’Stock</div>
 <div style={{fontSize:11,color:roleColors[currentUser.role],fontWeight:600}}>{currentUser.nom}</div>
 </div>
 {/* Tiroir de navigation */}
 {drawer&&<div style={{position:"fixed",inset:0,zIndex:300}}>
-<div style={{position:"absolute",inset:0,background:"#0006"}} onClick={()=>setDrawer(false)}/>
-<div style={{position:"absolute",top:0,left:0,bottom:0,width:250,maxWidth:"82vw",background:P.sf,display:"flex",flexDirection:"column",boxShadow:"4px 0 20px #0004"}}>{navContent}</div>
+<div className="pa-overlay" style={{position:"absolute",inset:0,background:"#0006"}} onClick={()=>setDrawer(false)}/>
+<div className="pa-drawer" style={{position:"absolute",top:0,left:0,bottom:0,width:250,maxWidth:"82vw",background:P.sf,display:"flex",flexDirection:"column",boxShadow:"4px 0 20px #0004"}}>{navContent}</div>
 </div>}
 </>:
 <div style={{width:sb?220:56,background:P.sf,borderRight:`1px solid ${P.bd}`,transition:"width .2s",flexShrink:0,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"2px 0 8px #0001"}}>{navContent}</div>}
-<div style={{flex:1,overflow:"auto",padding:isMobile?12:24}}><div style={{maxWidth:1120}}><ErrorBoundary key={tab}>{R()}</ErrorBoundary></div></div>
+<div className="pa-content" style={{flex:1,overflow:"auto",padding:isMobile?12:24}}><div className="pa-fade" key={tab} style={{maxWidth:1440,margin:"0 auto"}}><ErrorBoundary key={tab}>{R()}</ErrorBoundary></div></div>
 </div>;}
 
