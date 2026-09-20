@@ -2197,6 +2197,18 @@ const roleLabels={admin:"Administrateur",logisticien:"Logisticien",adherent:"Adh
 const stripTabs=visibleTabs.filter(t=>!["journal","users","reglages","adherent"].includes(t.id));
 
 const exp=isMobile?true:sb; // menu toujours déplié dans le tiroir mobile
+// Regroupement logique du menu, calqué sur celui de Planet'Desk : les
+// intertitres n'apparaissent que s'il y a assez d'onglets (pas pour un
+// adhérent qui n'a qu'un écran).
+const NAV_GROUPS=[
+  {label:null,ids:["dashboard"]},
+  {label:"Stock",ids:["references","espaces"]},
+  {label:"Mouvements",ids:["entrees","sorties"]},
+  {label:"Adhérents & tarifs",ids:["adherents","grille"]},
+  {label:"Facturation & douane",ids:["facturation","compta"]},
+  {label:"Administration",ids:["journal","users","reglages","adherent"]},
+];
+const showGroupLabels=visibleTabs.length>3;
 const navContent=<>
 <div style={{padding:exp?"16px 14px":"16px 10px",borderBottom:`1px solid ${P.bd}`,display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>isMobile?setDrawer(false):sSb(!sb)}><img src={(d&&d.logo)||LOGO} width={exp?40:32} height={exp?40:32} style={{borderRadius:"50%",flexShrink:0,objectFit:"cover"}}/>{exp&&<div style={{fontWeight:700,fontSize:13,color:P.ac,whiteSpace:"nowrap"}}>Planet’Stock<br/><span style={{fontWeight:400,fontSize:9,color:P.tm}}>by Planet Aura</span></div>}</div>
 
@@ -2212,7 +2224,7 @@ const navContent=<>
 <button onClick={handleLogout} style={{marginTop:8,width:"100%",background:P.rds,color:P.rd,border:`1px solid ${P.rd}30`,borderRadius:6,padding:"9px 10px",minHeight:38,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:FN}}>Déconnexion</button>
 </div>}
 
-<div style={{padding:"6px 0",flex:1,overflowY:"auto"}}>{visibleTabs.map(t=><div key={t.id} onClick={()=>{goTab(t.id);if(isMobile)setDrawer(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:exp?"11px 14px":"9px 12px",cursor:"pointer",background:tab===t.id?P.acs:"transparent",borderLeft:tab===t.id?`3px solid ${P.ac}`:"3px solid transparent",transition:"all .12s"}} onMouseEnter={e=>{if(tab!==t.id)e.currentTarget.style.background=P.sf2;}} onMouseLeave={e=>{if(tab!==t.id)e.currentTarget.style.background="transparent";}}><span style={{fontSize:15,flexShrink:0}}>{t.icon}</span>{exp&&<span style={{fontSize:12,fontWeight:tab===t.id?600:400,color:tab===t.id?P.ac:P.tm,whiteSpace:"nowrap"}}>{t.label}</span>}</div>)}</div>
+<div style={{padding:"6px 0",flex:1,overflowY:"auto"}}>{NAV_GROUPS.map(g=>{const items=visibleTabs.filter(t=>g.ids.includes(t.id));if(!items.length)return null;return <div key={g.label||"_top"}>{exp&&showGroupLabels&&g.label&&<div style={{padding:"12px 14px 4px",fontSize:9,fontWeight:700,letterSpacing:".06em",color:P.td,textTransform:"uppercase"}}>{g.label}</div>}{items.map(t=><div key={t.id} onClick={()=>{goTab(t.id);if(isMobile)setDrawer(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:exp?"11px 14px":"9px 12px",cursor:"pointer",background:tab===t.id?P.acs:"transparent",borderLeft:tab===t.id?`3px solid ${P.ac}`:"3px solid transparent",transition:"all .12s"}} onMouseEnter={e=>{if(tab!==t.id)e.currentTarget.style.background=P.sf2;}} onMouseLeave={e=>{if(tab!==t.id)e.currentTarget.style.background="transparent";}}><span style={{fontSize:15,flexShrink:0}}>{t.icon}</span>{exp&&<span style={{fontSize:12,fontWeight:tab===t.id?600:400,color:tab===t.id?P.ac:P.tm,whiteSpace:"nowrap"}}>{t.label}</span>}</div>)}</div>;})}</div>
 {exp&&<div style={{padding:12,borderTop:`1px solid ${P.bd}`,fontSize:8,color:P.td}}>Planet’Stock — © Planet Aura 2026</div>}
 </>;
 
@@ -2235,6 +2247,10 @@ return <div className="pa-root" style={{fontFamily:FN,background:P.bg,color:P.tx
 <div style={{fontWeight:700,fontSize:14,color:P.ac,flex:1}}>Planet’Stock</div>
 <div style={{fontSize:11,color:roleColors[currentUser.role],fontWeight:600}}>{currentUser.nom}</div>
 </div>
+{/* Barre d'onglets tactile : un appui pour changer d'écran, sans ouvrir le menu */}
+{stripTabs.length>1&&<div className="pa-tabstrip" style={{position:"sticky",top:52,zIndex:30,display:"flex",gap:6,overflowX:"auto",background:P.bg,borderBottom:`1px solid ${P.bd}`,padding:"8px 10px",WebkitOverflowScrolling:"touch"}}>
+{stripTabs.map(t=><button key={t.id} data-tab={t.id} onClick={()=>goTab(t.id)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:6,border:`1px solid ${tab===t.id?P.ac:P.bd}`,background:tab===t.id?P.acs:P.sf,color:tab===t.id?P.ac:P.tm,fontWeight:600,fontSize:12,fontFamily:FN,borderRadius:20,padding:"8px 13px",minHeight:40,cursor:"pointer",transition:"all .15s"}}>{t.icon} {t.label}</button>)}
+</div>}
 {/* Tiroir de navigation */}
 {drawer&&<div style={{position:"fixed",inset:0,zIndex:300}}>
 <div className="pa-overlay" style={{position:"absolute",inset:0,background:"#0006"}} onClick={()=>setDrawer(false)}/>
