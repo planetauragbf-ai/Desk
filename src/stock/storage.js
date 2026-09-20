@@ -124,8 +124,13 @@ export async function loadState() {
 // (voir supabase/phase2-securite.sql). Non bloquant : si l'auth échoue,
 // l'application continue tant que le verrouillage n'est pas activé.
 export async function ensureCloudAuth(email, password) {
-  // Les comptes sont créés par l'administrateur dans Planet'Desk :
-  // plus aucune inscription automatique depuis le module stock.
+  // Site autonome uniquement (en mode intégré à Planet'Desk, la session
+  // Supabase de l'application interne est déjà ouverte et cette fonction
+  // n'est pas appelée). Le compte Supabase est créé au premier passage,
+  // avec le mot de passe saisi. La vérité reste le compte applicatif
+  // (état JSONB) : un inconnu qui s'inscrirait ici n'obtient aucune
+  // donnée — stock_state() ne reconnaît pas son email — et ne peut rien
+  // écrire (politique réservée aux internes).
   if (!supabase) return { ok: true, mode: "local" };
   try {
     const { error } = await withTimeout(
@@ -133,6 +138,24 @@ export async function ensureCloudAuth(email, password) {
       6000
     );
     if (!error) return { ok: true, mode: "signin" };
+    if (/invalid login credentials/i.test(error.message || "")) {
+      const { data, error: e2 } = await withTimeout(
+        supabase.auth.signUp({ email, password }),
+        8000
+      );
+      if (!e2 && data?.session) return { ok: true, mode: "signup" };
+      if (!e2)
+        return {
+          ok: false,
+          msg: "Compte créé — cliquez le lien reçu par email puis reconnectez-vous. (L'administrateur peut désactiver cette confirmation dans Supabase : Authentication → Sign In / Providers → Email → « Confirm email ».)",
+        };
+      return { ok: false, msg: e2.message };
+    }
+    if (/email not confirmed/i.test(error.message || ""))
+      return {
+        ok: false,
+        msg: "Compte non confirmé : cliquez le lien reçu par email, ou demandez à l'administrateur de désactiver la confirmation d'email dans Supabase.",
+      };
     return { ok: false, msg: error.message };
   } catch (e) {
     return { ok: false, msg: String(e?.message || e) };
