@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:stock": "vite build --config vite.stock.config.ts",
     "preview": "vite preview",
     "deploy": "wrangler deploy"
   },

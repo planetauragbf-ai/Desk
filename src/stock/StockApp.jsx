@@ -1912,7 +1912,8 @@ const doLogin=async()=>{
   const e=email.trim().toLowerCase();
   // Mode intégré : la session Supabase de l'application interne est déjà
   // ouverte, on ne la remplace pas.
-  if(!skipAuth)await ensureCloudAuth(e,mdp);
+  let auth={ok:true};
+  if(!skipAuth)auth=await ensureCloudAuth(e,mdp);
   // Recharger l'état depuis le cloud (nécessaire quand la base est verrouillée aux utilisateurs authentifiés)
   let dd=d;
   try{const fresh=await onRefresh?.();if(fresh)dd=fresh;}catch{}
@@ -1922,7 +1923,10 @@ const doLogin=async()=>{
   // Check adherent
   const adh=dd.adherents.find(a=>a.email?.toLowerCase()===e&&a.mdp===mdp&&a.stockageActif);
   if(adh){setBusy(false);return onLogin({id:adh.id,nom:adh.name,email:adh.email,role:"adherent",adherentId:adh.id,type:"adherent"});}
-  setBusy(false);setErr("Email ou mot de passe incorrect");
+  // L'échec d'authentification cloud porte parfois la vraie explication
+  // (confirmation d'email en attente…) : on l'affiche plutôt que le
+  // message générique.
+  setBusy(false);setErr(!auth.ok&&auth.msg&&!/invalid login credentials/i.test(auth.msg)?auth.msg:"Email ou mot de passe incorrect");
 };
 return <div className="pa-root" style={{fontFamily:FN,background:P.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
