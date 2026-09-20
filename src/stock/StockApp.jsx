@@ -1812,12 +1812,12 @@ return <div>
 // ═══ GESTION UTILISATEURS (Admin) ═══
 function GestionUsers({data:d,setData:sD,currentUser:cu}){
 const[sh,sSh]=useState(false);const[ed,sEd]=useState(null);
-const[f,sF]=useState({nom:"",email:"",mdp:"",role:"logisticien",adherentId:"",permissions:{entrees:true,sorties:true,references:true,espaces:true,facturation:false,compta:false,grille:false,journal:false}});
+const[f,sF]=useState({nom:"",email:"",mdp:"",role:"logisticien",adherentId:"",permissions:{entrees:true,sorties:true,references:true,espaces:true,facturation:false,compta:false,grille:false,journal:false,adherent:false}});
 const users=d.users||[];
-const open=u=>{sEd(u);sF(u?{nom:u.nom,email:u.email,mdp:u.mdp,role:u.role,adherentId:u.adherentId||"",permissions:u.permissions||{entrees:true,sorties:true,references:true,espaces:true,facturation:false,compta:false,grille:false,journal:false}}:{nom:"",email:"",mdp:"",role:"logisticien",adherentId:"",permissions:{entrees:true,sorties:true,references:true,espaces:true,facturation:false,compta:false,grille:false,journal:false}});sSh(true);};
+const open=u=>{sEd(u);sF(u?{nom:u.nom,email:u.email,mdp:u.mdp,role:u.role,adherentId:u.adherentId||"",permissions:u.permissions||{entrees:true,sorties:true,references:true,espaces:true,facturation:false,compta:false,grille:false,journal:false,adherent:false}}:{nom:"",email:"",mdp:"",role:"logisticien",adherentId:"",permissions:{entrees:true,sorties:true,references:true,espaces:true,facturation:false,compta:false,grille:false,journal:false,adherent:false}});sSh(true);};
 const doSave=()=>{if(!f.nom||!f.email||!f.mdp)return;const nd={...d};if(ed){nd.users=(nd.users||[]).map(u=>u.id===ed.id?{...u,...f}:u);}else{nd.users=[...(nd.users||[]),{id:"U"+Date.now(),...f,creePar:cu.nom,creeLe:new Date().toISOString()}];}nd.auditLog=[...(nd.auditLog||[]),{date:new Date().toISOString(),user:cu.nom,role:cu.role,module:"Utilisateurs",action:`${ed?"Modifié":"Créé"} utilisateur ${f.nom} (${f.role})`}];sD(nd);sSh(false);};
 const delUser=u=>{const nd={...d,users:(d.users||[]).filter(x=>x.id!==u.id),auditLog:[...(d.auditLog||[]),{date:new Date().toISOString(),user:cu.nom,role:cu.role,module:"Utilisateurs",action:`Supprimé utilisateur ${u.nom}`}]};sD(nd);};
-const permLabels={entrees:"Entrées",sorties:"Sorties",references:"Références",espaces:"Espaces",facturation:"Relevés",compta:"Compta Matière",grille:"Tarifs",journal:"Journal"};
+const permLabels={entrees:"Entrées",sorties:"Sorties",references:"Références",espaces:"Espaces",facturation:"Relevés",compta:"Compta Matière",grille:"Tarifs",journal:"Journal",adherent:"Espace adhérent"};
 return <div>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,marginBottom:14}}><h3 style={{color:P.tx,margin:0}}>👥 Gestion Utilisateurs & Accès</h3><Btn onClick={()=>open(null)}>+ Utilisateur</Btn></div>
 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:10,marginBottom:14}}>
@@ -2101,6 +2101,7 @@ const allowedTabIds=useMemo(()=>{
   if(p.compta)ids.push("compta");
   if(p.grille)ids.push("grille");
   if(p.journal)ids.push("journal");
+  if(p.adherent)ids.push("adherent");
   return ids;
 },[currentUser]);
 
@@ -2202,6 +2203,7 @@ if(perms.grille)visibleTabs.push({id:"grille",label:"Tarifs",icon:"📋"});
 if(perms.facturation)visibleTabs.push({id:"facturation",label:"Relevés",icon:"🧾"});
 if(perms.compta)visibleTabs.push({id:"compta",label:"Compta Matière",icon:"⚖️"});
 if(perms.journal)visibleTabs.push({id:"journal",label:"Journal",icon:"📝"});
+if(perms.adherent)visibleTabs.push({id:"adherent",label:"Espace Adh.",icon:"👤"});
 }
 
 // For adherent, filter data to their own
