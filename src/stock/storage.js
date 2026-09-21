@@ -148,10 +148,19 @@ export async function ensureCloudAuth(email, password) {
         8000
       );
       if (!e2 && data?.session) return { ok: true, mode: "signup" };
+      // signUp sans erreur mais sans session : soit le compte vient d'être
+      // créé et attend une confirmation email, soit (Supabase masque
+      // l'existence) le compte existait déjà et le mot de passe est faux.
       if (!e2)
         return {
           ok: false,
-          msg: "Compte créé — cliquez le lien reçu par email puis reconnectez-vous. (L'administrateur peut désactiver cette confirmation dans Supabase : Authentication → Sign In / Providers → Email → « Confirm email ».)",
+          msg: "Mot de passe incorrect, ou compte en attente de confirmation par email. Utilisez « Mot de passe oublié ? » pour définir un nouveau mot de passe.",
+        };
+      // Le compte existe déjà : le mot de passe saisi est simplement faux.
+      if (/already\s*regist|already\s*exist|user\s*already/i.test(e2.message || ""))
+        return {
+          ok: false,
+          msg: "Mot de passe incorrect. Cliquez « Mot de passe oublié ? » pour le réinitialiser.",
         };
       return { ok: false, msg: e2.message };
     }
