@@ -8,7 +8,11 @@
 // ⚠️ JAMAIS la clé secrète "sb_secret_..." / "service_role" côté frontend.
 // Client Supabase PARTAGÉ avec le reste de l'application interne :
 // un seul projet Supabase et une seule session d'authentification.
-import { supabase as sharedSupabase } from "../lib/supabase";
+import { supabase as sharedSupabase, isRecoveryLink as _isRecoveryLink } from "../lib/supabase";
+
+// Vrai quand la page est ouverte depuis un lien de réinitialisation de mot
+// de passe (capté avant que Supabase n'efface le fragment de l'URL).
+export const isRecoveryLink = _isRecoveryLink;
 
 export const SK = "pa-stock-clean2";
 

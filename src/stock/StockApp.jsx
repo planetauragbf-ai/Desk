@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, Component } from "react";
-import { loadState, saveState, uploadPhoto, deletePhoto, subscribeSync, fetchCloudState, ensureCloudAuth, cloudSignOut, changeCloudPassword, sendPasswordReset, onPasswordRecovery } from "./storage.js";
+import { loadState, saveState, uploadPhoto, deletePhoto, subscribeSync, fetchCloudState, ensureCloudAuth, cloudSignOut, changeCloudPassword, sendPasswordReset, onPasswordRecovery, isRecoveryLink } from "./storage.js";
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
@@ -2108,7 +2108,7 @@ const isMobile=useIsMobile();const[drawer,setDrawer]=useState(false);const[pwOpe
 // Retour depuis le lien « mot de passe oublié » reçu par email : Supabase
 // place #type=recovery dans l'URL et émet un évènement. On bascule alors
 // sur l'écran « nouveau mot de passe ».
-const[recovery,setRecovery]=useState(()=>{try{return /type=recovery/.test(window.location.hash||"");}catch{return false;}});
+const[recovery,setRecovery]=useState(()=>{try{return isRecoveryLink||/type=recovery/.test(window.location.hash||"");}catch{return isRecoveryLink;}});
 useEffect(()=>{ld().then(x=>{
 const raw=x||defaultState;
 const safe={...defaultState,...raw,
