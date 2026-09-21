@@ -1928,14 +1928,21 @@ const doLogin=async()=>{
   // changer son mot de passe empêcherait de se reconnecter. En mode local
   // (sans Supabase), le mdp reste le seul contrôle.
   const cloudOk=auth.ok&&(auth.mode==="signin"||auth.mode==="signup");
+  // En mode connecté (cloud), l'authentification Supabase est l'UNIQUE
+  // garde : on ne se rabat sur le mot de passe mémorisé (mdp) que hors
+  // cloud (mode local) ou en mode intégré au Desk. Sans cette restriction,
+  // un mot de passe mémorisé qui « colle » ouvrait une session sans vraie
+  // authentification — ça marchait sur un appareil (données en cache) mais
+  // pas sur un autre, et masquait une divergence de mot de passe.
+  const allowMdp=skipAuth||auth.mode==="local";
   // Recharger l'état depuis le cloud (nécessaire quand la base est verrouillée aux utilisateurs authentifiés)
   let dd=d;
   try{const fresh=await onRefresh?.();if(fresh)dd=fresh;}catch{}
   // Check admin/logisticien users
-  const user=(dd.users||[]).find(u=>u.email.toLowerCase()===e&&(cloudOk||u.mdp===mdp));
+  const user=(dd.users||[]).find(u=>u.email.toLowerCase()===e&&(cloudOk||(allowMdp&&u.mdp===mdp)));
   if(user){setBusy(false);return onLogin({...user,type:"internal"});}
   // Check adherent
-  const adh=dd.adherents.find(a=>a.email?.toLowerCase()===e&&(cloudOk||a.mdp===mdp)&&a.stockageActif);
+  const adh=dd.adherents.find(a=>a.email?.toLowerCase()===e&&(cloudOk||(allowMdp&&a.mdp===mdp))&&a.stockageActif);
   if(adh){setBusy(false);return onLogin({id:adh.id,nom:adh.name,email:adh.email,role:"adherent",adherentId:adh.id,type:"adherent"});}
   // L'échec d'authentification cloud porte parfois la vraie explication
   // (confirmation d'email en attente…) : on l'affiche plutôt que le
