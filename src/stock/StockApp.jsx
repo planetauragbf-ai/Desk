@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, Component } from "react";
-import { loadState, saveState, uploadPhoto, deletePhoto, subscribeSync, fetchCloudState, ensureCloudAuth, cloudSignOut, changeCloudPassword } from "./storage.js";
+import { loadState, saveState, uploadPhoto, deletePhoto, subscribeSync, fetchCloudState, ensureCloudAuth, cloudSignOut, changeCloudPassword, sendPasswordReset, onPasswordRecovery } from "./storage.js";
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
@@ -1904,8 +1904,16 @@ return <div><h3 style={{color:P.tx,margin:"0 0 14px"}}>⚙️ Réglages</h3>
 </div>;}
 
 // ═══ LOGIN SCREEN ═══
-function LoginScreen({data:d,onLogin,onRefresh,skipAuth}){
-const[email,setEmail]=useState("");const[mdp,setMdp]=useState("");const[err,setErr]=useState("");const[busy,setBusy]=useState(false);
+function LoginScreen({data:d,onLogin,onRefresh,skipAuth,onReset}){
+const[email,setEmail]=useState("");const[mdp,setMdp]=useState("");const[err,setErr]=useState("");const[busy,setBusy]=useState(false);const[resetMsg,setResetMsg]=useState("");
+const doReset=async()=>{
+  const e=email.trim().toLowerCase();
+  if(!e){setResetMsg("");setErr("Entrez d'abord votre email ci-dessus, puis cliquez « Mot de passe oublié ».");return;}
+  setErr("");setResetMsg("⏳ Envoi de l'email…");
+  const r=await onReset?.(e);
+  if(r?.ok)setResetMsg("✅ Email envoyé à "+e+" — ouvrez le lien pour choisir un nouveau mot de passe (pensez aux spams).");
+  else{setResetMsg("");setErr(r?.msg||"Envoi impossible.");}
+};
 const doLogin=async()=>{
   if(busy)return;
   setErr("");setBusy(true);
@@ -1945,6 +1953,8 @@ return <div className="pa-root" style={{fontFamily:FN,background:P.bg,minHeight:
 <Inp label="Mot de passe" type="password" value={mdp} onChange={setMdp} placeholder="••••••••"/>
 {err&&<div style={{color:P.rd,fontSize:12,fontWeight:600,textAlign:"center"}}>{err}</div>}
 <Btn onClick={doLogin} dis={busy} style={{width:"100%",marginTop:4}}>{busy?"⏳ Connexion...":"Se connecter"}</Btn>
+{!skipAuth&&<button onClick={doReset} style={{background:"none",border:"none",color:P.ac,fontSize:12,cursor:"pointer",textDecoration:"underline",fontFamily:FN,padding:"4px 0"}}>Mot de passe oublié ?</button>}
+{resetMsg&&<div style={{color:P.gn,fontSize:12,textAlign:"center",lineHeight:1.4}}>{resetMsg}</div>}
 </div>
 </div>
 </div>;}
@@ -1970,6 +1980,33 @@ return <Modal title="🔑 Modifier mon mot de passe" onClose={onClose}>
 </>}
 </div>
 </Modal>;}
+
+// ═══ RÉCUPÉRATION : définir un nouveau mot de passe (retour du lien email) ═══
+function PasswordRecovery({data:d,onDone}){
+const[p1,sP1]=useState("");const[p2,sP2]=useState("");const[busy,sBusy]=useState(false);const[err,sErr]=useState("");const[ok,sOk]=useState(false);
+const submit=async()=>{
+  if(p1.length<6){sErr("6 caractères minimum");return;}
+  if(p1!==p2){sErr("Les deux mots de passe ne correspondent pas");return;}
+  sErr("");sBusy(true);
+  const r=await changeCloudPassword(p1);
+  if(!r.ok){sErr(r.msg||"Échec de la mise à jour");sBusy(false);return;}
+  sOk(true);setTimeout(onDone,1800);
+};
+return <div className="pa-root" style={{fontFamily:FN,background:P.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<div style={{background:P.sf,borderRadius:20,padding:"min(40px,7vw)",maxWidth:400,width:"100%",boxShadow:"0 20px 60px #0002",textAlign:"center",border:`1px solid ${P.bd}`}}>
+<img src={(d&&d.logo)||LOGO} width={70} height={70} style={{borderRadius:"50%",marginBottom:14,objectFit:"cover"}}/>
+<h2 style={{color:P.ac,margin:"0 0 4px",fontSize:20}}>Nouveau mot de passe</h2>
+<div style={{color:P.tm,fontSize:12,marginBottom:20}}>Choisissez votre nouveau mot de passe</div>
+{ok?<div style={{color:P.gn,fontWeight:600,padding:10}}>✅ Mot de passe enregistré — connexion en cours…</div>:
+<div style={{display:"grid",gap:12,textAlign:"left"}}>
+<Inp label="Nouveau mot de passe" type="password" value={p1} onChange={sP1} placeholder="••••••••"/>
+<Inp label="Confirmer" type="password" value={p2} onChange={sP2} placeholder="••••••••"/>
+{err&&<div style={{color:P.rd,fontSize:12,fontWeight:600,textAlign:"center"}}>{err}</div>}
+<Btn onClick={submit} dis={busy} style={{width:"100%",marginTop:4}}>{busy?"⏳ Enregistrement...":"Enregistrer"}</Btn>
+</div>}
+</div>
+</div>;}
 
 // ═══ FICHE TECHNIQUE (ouverte via QR code : /stock/fiche/REFxxxx) ═══
 function FicheRef({data:d,refId,currentUser,onClose}){
@@ -2068,6 +2105,10 @@ const[currentUser,setCurrentUser]=useState(()=>{try{const s=localStorage.getItem
 // Route /stock/fiche/REFxxxx (arrivée via scan de QR code)
 const[ficheId,sFiche]=useState(()=>{try{const m=window.location.pathname.match(/\/stock\/fiche\/([A-Za-z0-9_-]+)/i);return m?decodeURIComponent(m[1]).toUpperCase():null;}catch{return null;}});
 const isMobile=useIsMobile();const[drawer,setDrawer]=useState(false);const[pwOpen,setPwOpen]=useState(false);
+// Retour depuis le lien « mot de passe oublié » reçu par email : Supabase
+// place #type=recovery dans l'URL et émet un évènement. On bascule alors
+// sur l'écran « nouveau mot de passe ».
+const[recovery,setRecovery]=useState(()=>{try{return /type=recovery/.test(window.location.hash||"");}catch{return false;}});
 useEffect(()=>{ld().then(x=>{
 const raw=x||defaultState;
 const safe={...defaultState,...raw,
@@ -2125,6 +2166,9 @@ useEffect(()=>{try{window.scrollTo({top:0});document.querySelector(".pa-content"
 // appareils (ordinateur / téléphone / autres sessions) dès qu'elles arrivent.
 useEffect(()=>{if(ld2)return;const unsub=subscribeSync(nv=>{sR(nv);});return unsub;},[ld2]);
 
+// Récupération de mot de passe (site autonome uniquement).
+useEffect(()=>{if(session)return;const off=onPasswordRecovery(()=>setRecovery(true));return off;},[session]);
+
 // Logo courant (documents imprimés + favicon de l'onglet)
 CURRENT_LOGO=(d&&d.logo)||LOGO;
 useEffect(()=>{try{const l=document.querySelector("link[rel='icon']");if(l)l.href=(d&&d.logo)||"/favicon.png";}catch{}},[d&&d.logo]);
@@ -2175,11 +2219,15 @@ useEffect(()=>{
 // eslint-disable-next-line react-hooks/exhaustive-deps
 },[ld2,d,currentUser,session]);
 
+// Retour depuis le lien de réinitialisation reçu par email : priorité à
+// l'écran « nouveau mot de passe », même avant le chargement des données.
+if(recovery&&!session)return <PasswordRecovery data={d} onDone={()=>{try{window.history.replaceState(null,"",window.location.pathname);}catch{}try{window.location.reload();}catch{}}}/>;
+
 if(ld2||!d)return <div className="pa-root" style={{fontFamily:FN,background:P.bg,color:P.tx,minHeight:session?"40vh":"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>{paStyles}<div style={{textAlign:"center"}}><img src={LOGO} width={60} height={60} style={{borderRadius:"50%",marginBottom:10}}/><div className="pa-spin"/><div style={{fontSize:13,color:P.tm}}>Chargement...</div></div></div>;
 
 // Not logged in → show login
 if(!currentUser&&session)return <div style={{fontFamily:FN,background:P.bg,minHeight:"60vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><div style={{background:P.sf,borderRadius:16,padding:32,maxWidth:420,textAlign:"center",border:`1px solid ${P.bd}`}}><div style={{fontSize:32,marginBottom:8}}>🔒</div><div style={{fontWeight:700,color:P.tx,marginBottom:6}}>Accès Planet'Stock non configuré</div><div style={{fontSize:13,color:P.tm,lineHeight:1.5}}>Votre compte Planet'Desk ({session.email}) n'est relié à aucun profil du stock. Demandez à votre administrateur de définir vos droits : Administration → votre compte → « Accès Planet'Stock ».</div></div></div>;
-if(!currentUser)return <LoginScreen data={d} onLogin={handleLogin} skipAuth={!!session} onRefresh={async()=>{const v=await fetchCloudState();if(v){sR(v);return v;}return null;}}/>;
+if(!currentUser)return <LoginScreen data={d} onLogin={handleLogin} skipAuth={!!session} onReset={sendPasswordReset} onRefresh={async()=>{const v=await fetchCloudState();if(v){sR(v);return v;}return null;}}/>;
 
 // Arrivée par QR code → fiche technique plein écran
 if(ficheId)return <FicheRef data={d} refId={ficheId} currentUser={currentUser} onClose={()=>{try{window.history.replaceState(null,"","/stock");}catch{}sFiche(null);}}/>;
