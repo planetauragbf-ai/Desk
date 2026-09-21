@@ -483,7 +483,7 @@ return <Modal title="📥 Import CSV — Administration" onClose={onClose} wide>
 
 // ═══ TABS ═══
 function Dashboard({data:d,setData:sD,currentUser:cu}){const[showImport,setShowImport]=useState(false);
-const{aa,tB,allE,occ,ca}=useMemo(()=>{const aa=d.adherents.filter(a=>a.stockageActif);const tB=d.references.reduce((s,r)=>s+(r.stockActuel||0),0);const allE=[];d.espaces.forEach(z=>z.rangs.forEach(r=>r.emplacements.forEach(e=>allE.push(e))));const occ=allE.filter(e=>d.references.some(x=>x.emplacement===e.id&&(x.stockActuel||0)>0)).length;const ca=d.factures.reduce((s,f)=>s+f.totalTTC,0);return{aa,tB,allE,occ,ca};},[d]);
+const{aa,tB,allE,occ,ca}=useMemo(()=>{const aa=d.adherents.filter(a=>a.stockageActif);const tB=d.references.reduce((s,r)=>s+(r.stockActuel||0),0);const allE=flatEmplacements(d.espaces);const occ=allE.filter(e=>d.references.some(x=>x.emplacement===e.id&&(x.stockActuel||0)>0)).length;const ca=d.factures.reduce((s,f)=>s+f.totalTTC,0);return{aa,tB,allE,occ,ca};},[d]);
 const isAdmin=cu?.role==="admin";
 return <div>
 {isAdmin&&<div style={{display:"flex",justifyContent:"flex-end",marginBottom:14}}><Btn onClick={()=>setShowImport(true)}>📥 Import CSV</Btn></div>}
@@ -562,14 +562,14 @@ const[f,sF]=useState({adherentId:"",designation:"",nomenclature:"AOP",couleur:"R
 const noms=["AOP","AOC","IGP","Vin de France","Champagne","Crémant"];const cols=["Rouge","Blanc","Rosé","Effervescent","Liquoreux"];const vols=["37.5cl","50cl","75cl","1L","1.5L Magnum","3L Jéroboam"];
 // Occupation dérivée des références : un espace de 12 peut accueillir
 // plusieurs réfs, on compte les bouteilles réellement présentes.
-const allE=[];d.espaces.forEach(z=>z.rangs.forEach(r=>r.emplacements.forEach(e=>{
+const allE=[];flatEmplacements(d.espaces).forEach(e=>{
 const refsHere=d.references.filter(x=>x.emplacement===e.id&&(x.stockActuel||0)>0);
 const btlsHere=refsHere.reduce((s,x)=>s+(x.stockActuel||0),0);
 const cap=e.cond==="Espace 12 btls"?12:null;
 const plein=cap?btlsHere>=cap:refsHere.length>0;
 const status=refsHere.length===0?"✅ libre":cap?(btlsHere>=cap?`⛔ plein ${btlsHere}/${cap}`:`🔶 ${btlsHere}/${cap} — ${cap-btlsHere} places libres`):`⛔ occupé (${refsHere.length} réf)`;
-allE.push({value:e.id,label:`${z.nom} › ${r.nom} › ${e.nom} (${e.cond}) ${status}`,occupe:plein});
-})));
+allE.push({value:e.id,label:`${e.zone} › ${e.rang}${e.etage?" › "+e.etage:""} › ${e.nom} (${e.cond}) ${status}`,occupe:plein});
+});
 allE.sort((a,b)=>(a.occupe?1:0)-(b.occupe?1:0));
 const doSave=()=>{if(!f.adherentId||!f.designation)return;const id="REF"+String(d.references.length+1).padStart(4,"0");const nd={...d};nd.references=[...nd.references,{id,...f,nbBtl:+f.nbBtl,alertStock:+f.alertStock||0,prixUnitaire:+f.prixUnitaire,stockActuel:+f.nbBtl,mouvements:[{date:new Date().toISOString(),type:"Entrée initiale",qty:+f.nbBtl,user:"Admin"}],creeLe:new Date().toISOString()}];sD(nd);sSh(false);sF({adherentId:"",designation:"",nomenclature:"AOP",couleur:"Rouge",volume:"75cl",alcool:"",prixUnitaire:"",droitsAccise:"Droit suspendu",condStock:"Espace 12 btls",emplacement:"",alertStock:"",nbBtl:0,entreeRef:""});};
 const filteredRefs=d.references.filter(r=>{
@@ -1148,6 +1148,32 @@ return <div style={{marginTop:10}}>
 <div style={{fontSize:9,color:P.td,marginTop:6}}>Répartition indicative : les bouteilles sont placées dans l'ordre des références.</div>
 </div>;}
 
+// ─── HIÉRARCHIE DES ESPACES : Zone › Rang › Étage › Emplacement ───
+// Compatibilité ascendante : un rang à l'ancien format (emplacements
+// directement dessous, sans étages) est présenté comme un unique étage
+// sans nom. Les nouveaux rangs utilisent le champ « etages ».
+function ragEtages(r){
+  if(Array.isArray(r.etages))return r.etages;
+  return (r.emplacements&&r.emplacements.length)?[{id:r.id+"-ET0",nom:"",emplacements:r.emplacements}]:[];
+}
+// Ajoute un étage à un rang (migre l'ancien format au passage).
+function rangAjoutEtage(r,nom){
+  const base=ragEtages(r);const{emplacements,...rest}=r;
+  return {...rest,etages:[...base,{id:r.id+"-ET"+Date.now(),nom,emplacements:[]}]};
+}
+// Ajoute un emplacement dans un étage donné (migre l'ancien format).
+function rangAjoutEmpl(r,etageId,empl){
+  const base=ragEtages(r);const{emplacements,...rest}=r;
+  return {...rest,etages:base.map(et=>et.id===etageId?{...et,emplacements:[...(et.emplacements||[]),empl]}:et)};
+}
+// Tous les emplacements à plat, avec leur contexte (zone, rang, étage).
+function flatEmplacements(espaces){
+  const out=[];
+  (espaces||[]).forEach(z=>(z.rangs||[]).forEach(r=>ragEtages(r).forEach(et=>(et.emplacements||[]).forEach(e=>
+    out.push({...e,zone:z.nom,rang:r.nom,etage:et.nom,zoneId:z.id,rangId:r.id,etageId:et.id})))));
+  return out;
+}
+
 // ─── VUE 3D RÉALISTE DE L'ENTREPÔT (three.js / WebGL) ───
 function Espaces3D({espaces,references,onSelect,selected}){
 const mountRef=useRef(null);
@@ -1206,21 +1232,22 @@ const clickables=[];const slotById=new Map();const root=new THREE.Group();scene.
 const hlMesh=new THREE.Mesh(new THREE.BoxGeometry(SLOT_W-3,SHELF_H-5,SLOT_D-1),M.sel);hlMesh.visible=false;hlMesh.position.y=(SHELF_H-5)/2;
 let zoneX=0;
 espaces.forEach(zone=>{
-const nSlots=Math.max(1,...zone.rangs.map(r=>r.emplacements.length),1);
-const rackW=nSlots*SLOT_W,rackH=Math.max(1,zone.rangs.length)*SHELF_H;
+const shelves=[];zone.rangs.forEach(rg=>ragEtages(rg).forEach(et=>shelves.push({rang:rg,etage:et,emplacements:et.emplacements||[]})));
+const nSlots=Math.max(1,...shelves.map(s=>s.emplacements.length),1);
+const rackW=nSlots*SLOT_W,rackH=Math.max(1,shelves.length)*SHELF_H;
 const zg=new THREE.Group();zg.position.x=zoneX;root.add(zg);
 // Montants métalliques
 [[0,0],[rackW,0],[0,SLOT_D],[rackW,SLOT_D]].forEach(([px,pz])=>{const up=new THREE.Mesh(new THREE.BoxGeometry(2,rackH+8,2),M.metal);up.position.set(px,(rackH+8)/2,pz-SLOT_D/2);up.castShadow=true;zg.add(up);});
 // Étiquette de zone
 const zl=makeLabel(zone.nom,14,"#2b7a9e");zl.position.set(rackW/2,rackH+20,0);zg.add(zl);
-zone.rangs.forEach((rang,ri)=>{
+shelves.forEach((sh,ri)=>{
 const y=ri*SHELF_H;
 // Planche
 const board=new THREE.Mesh(new THREE.BoxGeometry(rackW+6,BOARD_T,SLOT_D+6),ri===0?M.woodDark:M.wood);
 board.position.set(rackW/2,y,0);board.receiveShadow=true;board.castShadow=true;zg.add(board);
-// Étiquette de rang
-const rl=makeLabel(rang.nom,8,"#64748b");rl.position.set(-12,y+8,0);zg.add(rl);
-rang.emplacements.forEach((e,ei)=>{
+// Étiquette de l'étagère (rang · étage)
+const rl=makeLabel(sh.etage.nom?sh.rang.nom+" · "+sh.etage.nom:sh.rang.nom,8,"#64748b");rl.position.set(-12,y+8,0);zg.add(rl);
+sh.emplacements.forEach((e,ei)=>{
 const sx=ei*SLOT_W+SLOT_W/2;
 const refsHere=references.filter(x=>x.emplacement===e.id&&(x.stockActuel||0)>0);
 const btls=refsHere.reduce((s,x)=>s+(x.stockActuel||0),0);
@@ -1291,17 +1318,19 @@ return <div>
 </div>
 </div>;}
 
-function Espaces({data:d,setData:sD,currentUser:cu}){const[nz,snz]=useState("");const[nr,snr]=useState({z:"",n:""});const[ne,sne]=useState({z:"",r:"",n:"",c:"Palette"});const[vue,setVue]=useState("liste");const[selEmp,setSelEmp]=useState(null);
-const allE=useMemo(()=>{const a=[];d.espaces.forEach(z=>z.rangs.forEach(r=>r.emplacements.forEach(e=>a.push({...e,zone:z.nom,rang:r.nom}))));return a;},[d.espaces]);
+function Espaces({data:d,setData:sD,currentUser:cu}){const[nz,snz]=useState("");const[nr,snr]=useState({z:"",n:""});const[nt,snt]=useState({z:"",r:"",n:""});const[ne,sne]=useState({z:"",r:"",t:"",n:"",c:"Palette"});const[vue,setVue]=useState("liste");const[selEmp,setSelEmp]=useState(null);
+const allE=useMemo(()=>flatEmplacements(d.espaces),[d.espaces]);
 const refsAt=useCallback(id=>d.references.filter(x=>x.emplacement===id&&(x.stockActuel||0)>0),[d.references]);
 const occ=useMemo(()=>allE.filter(e=>refsAt(e.id).length>0).length,[allE,refsAt]);
-const rFor=ne.z?d.espaces.find(z=>z.id===ne.z)?.rangs||[]:[];
+const rFor=ne.z?d.espaces.find(z=>z.id===ne.z)?.rangs||[]:[];// rangs de la zone choisie (emplacement)
+const etFor=ne.r?ragEtages((rFor.find(r=>r.id===ne.r)||{})):[];// étages du rang choisi (emplacement)
+const rForT=nt.z?d.espaces.find(z=>z.id===nt.z)?.rangs||[]:[];// rangs de la zone choisie (étage)
 const user=cu?.nom||"Admin";
 // Réfs en stock sans emplacement valide (texte libre ou vide) → affectation rapide
 const empIds=new Set(allE.map(e=>e.id));
 const orphelines=d.references.filter(r=>(r.stockActuel||0)>0&&(!r.emplacement||!empIds.has(r.emplacement)));
 const eOpts=useMemo(()=>allE.map(e=>{const rh=refsAt(e.id);const btls=rh.reduce((s,x)=>s+(x.stockActuel||0),0);const cap=e.cond==="Espace 12 btls"?12:null;
-return{value:e.id,label:`${e.zone} › ${e.rang} › ${e.nom} (${e.cond}) ${rh.length===0?"✅ libre":cap?`${btls}/${cap}`:"⛔ occupé"}`};}),[allE,refsAt]);
+return{value:e.id,label:`${e.zone} › ${e.rang}${e.etage?" › "+e.etage:""} › ${e.nom} (${e.cond}) ${rh.length===0?"✅ libre":cap?`${btls}/${cap}`:"⛔ occupé"}`};}),[allE,refsAt]);
 const affecter=(refId,empId)=>{if(!empId)return;const r=d.references.find(x=>x.id===refId);const lbl=eOpts.find(o=>o.value===empId)?.label||empId;
 const nd={...d,references:d.references.map(x=>x.id===refId?{...x,emplacement:empId,historique:[...(x.historique||[]),{date:new Date().toISOString(),user,changes:[{champ:"Emplacement",avant:r?.emplacement||"—",apres:lbl}]}]}:x),
 auditLog:[...(d.auditLog||[]),{date:new Date().toISOString(),user,role:cu?.role||"admin",module:"Espaces",action:`${refId} affectée à l'emplacement ${lbl}`}]};sD(nd);};
@@ -1325,7 +1354,7 @@ return <div><div style={{display:"flex",justifyContent:"space-between",alignItem
 {selInfo&&(()=>{const rh=refsAt(selInfo.id);const btls=rh.reduce((s,x)=>s+(x.stockActuel||0),0);const cap=selInfo.cond==="Espace 12 btls"?12:null;
 return <Card style={{marginBottom:14,borderLeft:`4px solid ${P.ac}`}}>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,gap:8}}>
-<div style={{fontSize:13,fontWeight:700,color:P.tx}}>📦 {selInfo.zone} › {selInfo.rang} › {selInfo.nom} <Badge color={rh.length?"am":"gn"}>{selInfo.cond}</Badge></div>
+<div style={{fontSize:13,fontWeight:700,color:P.tx}}>📦 {selInfo.zone} › {selInfo.rang}{selInfo.etage?` › ${selInfo.etage}`:""} › {selInfo.nom} <Badge color={rh.length?"am":"gn"}>{selInfo.cond}</Badge></div>
 <Btn v="ghost" sm onClick={()=>setSelEmp(null)}>✕</Btn>
 </div>
 <div style={{fontSize:12,color:P.tm,marginBottom:8}}>{cap?`${btls}/${cap} bouteilles — ${Math.max(0,cap-btls)} place(s) libre(s)`:`${btls} bouteilles`} — {rh.length} référence(s)</div>
@@ -1334,8 +1363,8 @@ return <Card style={{marginBottom:14,borderLeft:`4px solid ${P.ac}`}}>
 {rh.length===0&&<div style={{fontSize:12,color:P.gn}}>✅ Emplacement libre</div>}
 </>}
 </Card>;})()}
-<Card style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:P.ac,marginBottom:10}}>PARAMÉTRAGE</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:10}}><div style={{background:P.bg,borderRadius:8,padding:10}}><div style={{fontSize:9,color:P.tm,fontWeight:600,marginBottom:4}}>ZONE</div><Inp placeholder="Nom" value={nz} onChange={snz} sm/><Btn v="secondary" sm onClick={()=>{if(!nz)return;sD({...d,espaces:[...d.espaces,{id:"Z"+Date.now(),nom:nz,rangs:[]}]});snz("");}} style={{marginTop:4,width:"100%"}}>+</Btn></div><div style={{background:P.bg,borderRadius:8,padding:10}}><div style={{fontSize:9,color:P.tm,fontWeight:600,marginBottom:4}}>RANG</div><Inp value={nr.z} options={d.espaces.map(z=>({value:z.id,label:z.nom}))} onChange={v=>snr({...nr,z:v})} sm/><Inp placeholder="Nom" value={nr.n} onChange={v=>snr({...nr,n:v})} sm style={{marginTop:3}}/><Btn v="secondary" sm onClick={()=>{if(!nr.z||!nr.n)return;sD({...d,espaces:d.espaces.map(z=>z.id===nr.z?{...z,rangs:[...z.rangs,{id:nr.z+"-R"+Date.now(),nom:nr.n,emplacements:[]}]}:z)});snr({z:"",n:""});}} style={{marginTop:4,width:"100%"}}>+</Btn></div><div style={{background:P.bg,borderRadius:8,padding:10}}><div style={{fontSize:9,color:P.tm,fontWeight:600,marginBottom:4}}>EMPLACEMENT</div><Inp value={ne.z} options={d.espaces.map(z=>({value:z.id,label:z.nom}))} onChange={v=>sne({...ne,z:v,r:""})} sm/><Inp value={ne.r} options={rFor.map(r=>({value:r.id,label:r.nom}))} onChange={v=>sne({...ne,r:v})} sm style={{marginTop:3}}/><Inp placeholder="Nom" value={ne.n} onChange={v=>sne({...ne,n:v})} sm style={{marginTop:3}}/><Inp value={ne.c} options={["Palette","Espace 12 btls"]} onChange={v=>sne({...ne,c:v})} sm style={{marginTop:3}}/><Btn v="secondary" sm onClick={()=>{if(!ne.z||!ne.r||!ne.n)return;sD({...d,espaces:d.espaces.map(z=>z.id===ne.z?{...z,rangs:z.rangs.map(r=>r.id===ne.r?{...r,emplacements:[...r.emplacements,{id:ne.r+"-E"+Date.now(),nom:ne.n,cond:ne.c,occupe:false,refId:null}]}:r)}:z)});sne({z:"",r:"",n:"",c:"Palette"});}} style={{marginTop:4,width:"100%"}}>+</Btn></div></div></Card>
-{vue==="liste"&&d.espaces.map(z=><Card key={z.id} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><h4 style={{color:P.ac,margin:0,fontSize:13}}>{z.nom}</h4><Btn v="danger" sm onClick={()=>sD({...d,espaces:d.espaces.filter(x=>x.id!==z.id)})}>Suppr.</Btn></div>{z.rangs.map(r=><div key={r.id} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:11,fontWeight:600,color:P.tm}}>{r.nom}</span><Btn v="ghost" sm onClick={()=>sD({...d,espaces:d.espaces.map(zz=>zz.id===z.id?{...zz,rangs:zz.rangs.filter(rr=>rr.id!==r.id)}:zz)})}>✕</Btn></div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{r.emplacements.map(e=>{const rh=refsAt(e.id);const btls=rh.reduce((s,x)=>s+(x.stockActuel||0),0);const cap=e.cond==="Espace 12 btls"?12:null;const plein=cap&&btls>=cap;
+<Card style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:P.ac,marginBottom:10}}>PARAMÉTRAGE</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:10}}><div style={{background:P.bg,borderRadius:8,padding:10}}><div style={{fontSize:9,color:P.tm,fontWeight:600,marginBottom:4}}>ZONE</div><Inp placeholder="Nom" value={nz} onChange={snz} sm/><Btn v="secondary" sm onClick={()=>{if(!nz)return;sD({...d,espaces:[...d.espaces,{id:"Z"+Date.now(),nom:nz,rangs:[]}]});snz("");}} style={{marginTop:4,width:"100%"}}>+</Btn></div><div style={{background:P.bg,borderRadius:8,padding:10}}><div style={{fontSize:9,color:P.tm,fontWeight:600,marginBottom:4}}>RANG</div><Inp value={nr.z} options={d.espaces.map(z=>({value:z.id,label:z.nom}))} onChange={v=>snr({...nr,z:v})} sm/><Inp placeholder="Nom" value={nr.n} onChange={v=>snr({...nr,n:v})} sm style={{marginTop:3}}/><Btn v="secondary" sm onClick={()=>{if(!nr.z||!nr.n)return;sD({...d,espaces:d.espaces.map(z=>z.id===nr.z?{...z,rangs:[...z.rangs,{id:nr.z+"-R"+Date.now(),nom:nr.n,etages:[]}]}:z)});snr({z:"",n:""});}} style={{marginTop:4,width:"100%"}}>+</Btn></div><div style={{background:P.bg,borderRadius:8,padding:10}}><div style={{fontSize:9,color:P.tm,fontWeight:600,marginBottom:4}}>ÉTAGE</div><Inp value={nt.z} options={d.espaces.map(z=>({value:z.id,label:z.nom}))} onChange={v=>snt({...nt,z:v,r:""})} sm/><Inp value={nt.r} options={rForT.map(r=>({value:r.id,label:r.nom}))} onChange={v=>snt({...nt,r:v})} sm style={{marginTop:3}} placeholder={rForT.length?"— Rang —":"➕ créez d'abord un rang"}/><Inp placeholder="Nom (ex : Étage 1)" value={nt.n} onChange={v=>snt({...nt,n:v})} sm style={{marginTop:3}}/><Btn v="secondary" sm onClick={()=>{if(!nt.z||!nt.r||!nt.n)return;sD({...d,espaces:d.espaces.map(z=>z.id===nt.z?{...z,rangs:z.rangs.map(r=>r.id===nt.r?rangAjoutEtage(r,nt.n):r)}:z)});snt({z:"",r:"",n:""});}} style={{marginTop:4,width:"100%"}}>+</Btn></div><div style={{background:P.bg,borderRadius:8,padding:10}}><div style={{fontSize:9,color:P.tm,fontWeight:600,marginBottom:4}}>EMPLACEMENT</div><Inp value={ne.z} options={d.espaces.map(z=>({value:z.id,label:z.nom}))} onChange={v=>sne({...ne,z:v,r:"",t:""})} sm/><Inp value={ne.r} options={rFor.map(r=>({value:r.id,label:r.nom}))} onChange={v=>sne({...ne,r:v,t:""})} sm style={{marginTop:3}} placeholder={rFor.length?"— Rang —":"➕ créez d'abord un rang"}/><Inp value={ne.t} options={etFor.map(et=>({value:et.id,label:et.nom||"(étage sans nom)"}))} onChange={v=>sne({...ne,t:v})} sm style={{marginTop:3}} placeholder={etFor.length?"— Étage —":"➕ créez d'abord un étage"}/><Inp placeholder="Nom (ex : Empl. 1)" value={ne.n} onChange={v=>sne({...ne,n:v})} sm style={{marginTop:3}}/><Inp value={ne.c} options={["Palette","Espace 12 btls"]} onChange={v=>sne({...ne,c:v})} sm style={{marginTop:3}}/><Btn v="secondary" sm onClick={()=>{if(!ne.z||!ne.r||!ne.t||!ne.n)return;sD({...d,espaces:d.espaces.map(z=>z.id===ne.z?{...z,rangs:z.rangs.map(r=>r.id===ne.r?rangAjoutEmpl(r,ne.t,{id:ne.r+"-E"+Date.now(),nom:ne.n,cond:ne.c,occupe:false,refId:null}):r)}:z)});sne({z:"",r:"",t:"",n:"",c:"Palette"});}} style={{marginTop:4,width:"100%"}}>+</Btn></div></div></Card>
+{vue==="liste"&&d.espaces.map(z=><Card key={z.id} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><h4 style={{color:P.ac,margin:0,fontSize:13}}>{z.nom}</h4><Btn v="danger" sm onClick={()=>sD({...d,espaces:d.espaces.filter(x=>x.id!==z.id)})}>Suppr.</Btn></div>{z.rangs.map(r=><div key={r.id} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:11,fontWeight:600,color:P.tm}}>{r.nom}</span><Btn v="ghost" sm onClick={()=>sD({...d,espaces:d.espaces.map(zz=>zz.id===z.id?{...zz,rangs:zz.rangs.filter(rr=>rr.id!==r.id)}:zz)})}>✕</Btn></div>{ragEtages(r).map(et=><div key={et.id} style={{marginBottom:6}}>{et.nom&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}><span style={{fontSize:10,color:P.td,fontWeight:600}}>🗂️ {et.nom}</span><Btn v="ghost" sm onClick={()=>sD({...d,espaces:d.espaces.map(zz=>zz.id===z.id?{...zz,rangs:zz.rangs.map(rr=>rr.id===r.id?{...rr,etages:ragEtages(rr).filter(x=>x.id!==et.id),emplacements:[]}:rr)}:zz)})}>✕</Btn></div>}<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{(et.emplacements||[]).map(e=>{const rh=refsAt(e.id);const btls=rh.reduce((s,x)=>s+(x.stockActuel||0),0);const cap=e.cond==="Espace 12 btls"?12:null;const plein=cap&&btls>=cap;
 return <div key={e.id} onClick={()=>setSelEmp(e.id===selEmp?null:e.id)} style={{padding:"7px 10px",borderRadius:8,border:selEmp===e.id?`2px solid ${P.ac}`:`1px solid ${rh.length?(plein?P.rd:P.am)+"60":P.bd}`,background:rh.length?(plein?"#fdeeee":"#fef9ee"):P.sf,minWidth:130,cursor:"pointer"}}>
 <div style={{display:"flex",justifyContent:"space-between",gap:6}}><span style={{fontSize:10,fontWeight:600}}>{e.nom}</span>{cap&&<span style={{fontSize:9,fontWeight:700,color:plein?P.rd:rh.length?P.am:P.gn}}>{btls}/{cap}</span>}</div>
 <div style={{fontSize:9,color:P.tm}}>{e.cond}{!cap&&rh.length?` — ${btls} btls`:""}</div>
@@ -1343,7 +1372,7 @@ return <div key={e.id} onClick={()=>setSelEmp(e.id===selEmp?null:e.id)} style={{
 {rh.length>3&&<div style={{fontSize:8,color:P.tm}}>… +{rh.length-3} autre(s)</div>}
 {cap&&!plein&&<div style={{fontSize:8.5,marginTop:2,color:P.gn}}>{cap-btls} place(s) libre(s)</div>}</>
 :<div style={{fontSize:9,marginTop:2,color:P.gn}}>Libre</div>}
-</div>;})}</div></div>)}</Card>)}</div>;}
+</div>;})}{(et.emplacements||[]).length===0&&<span style={{fontSize:10,color:P.td}}>— aucun emplacement —</span>}</div></div>)}</div>)}</Card>)}</div>;}
 
 function GrilleTarifaire({data:d,setData:sD}){const[sel,sSel]=useState("");const adh=d.adherents.find(a=>a.id===sel);const upd=(k,v)=>{sD({...d,adherents:d.adherents.map(a=>a.id===sel?{...a,grille:{...a.grille,[k]:+v}}:a)});};
 const sections=[{s:"ENTRÉE",f:[{k:"entree_forfait_palette",l:"Forfait palette",u:"€ HT"},{k:"entree_par_palette_mono",l:"Par palette mono-réf",u:"€ HT / pal."},{k:"entree_par_ref_multi",l:"Par référence multi-réf",u:"€ HT / réf"},{k:"entree_colis_gratuits",l:"Seuil colis gratuits",u:"colis"},{k:"entree_par_colis_payant",l:"Par colis payant",u:"€ HT / colis"},{k:"entree_par_ref_colis",l:"Par référence (colis)",u:"€ HT / réf"}]},{s:"STOCKAGE MENSUEL",f:[{k:"stock_palette_demi",l:"Palette demi-mois (≤15j)",u:"€ HT / pal."},{k:"stock_palette_mois",l:"Palette mois complet",u:"€ HT / pal."},{k:"stock_espace12",l:"Espace 12 bouteilles",u:"€ HT / espace"}]},{s:"SORTIE",f:[{k:"sortie_picking_lot6",l:"Picking par lot de 6",u:"€ HT / lot"},{k:"sortie_min_prepa_colis",l:"Prépa par colis (remplace le picking si cartons > nécessaire)",u:"€ HT / colis"},{k:"sortie_colis_ref_tpa_oui",l:"Sortie réf (T PA=OUI)",u:"€ HT / réf"},{k:"sortie_colis_ref_tpa_non",l:"Sortie réf (T PA=NON)",u:"€ HT / réf"},{k:"sortie_picking_palette_mono",l:"Picking pal. mono-réf",u:"€ HT / pal."},{k:"sortie_picking_palette_multi",l:"Picking pal. multi-réf",u:"€ HT / réf"},{k:"sortie_prepa_palette",l:"Prépa palette (film…)",u:"€ HT / pal."},{k:"sortie_manut_palette",l:"Manutention",u:"€ HT / sortie"}]}];
