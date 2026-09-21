@@ -168,6 +168,40 @@ export async function cloudSignOut() {
   } catch {}
 }
 
+// Envoi d'un email de réinitialisation du mot de passe (site autonome) :
+// l'utilisateur reçoit un lien qui le ramène sur le site pour définir un
+// nouveau mot de passe, sans avoir eu besoin de se connecter.
+export async function sendPasswordReset(email) {
+  if (!supabase) return { ok: false, msg: "Réinitialisation indisponible en mode local." };
+  try {
+    const redirectTo =
+      typeof window !== "undefined" ? window.location.origin + window.location.pathname : undefined;
+    const { error } = await withTimeout(
+      supabase.auth.resetPasswordForEmail(email, redirectTo ? { redirectTo } : undefined),
+      8000
+    );
+    if (error) return { ok: false, msg: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: String(e?.message || e) };
+  }
+}
+
+// S'abonne à l'évènement de récupération : quand l'utilisateur revient
+// depuis le lien reçu par email, Supabase ouvre une session temporaire et
+// émet "PASSWORD_RECOVERY". On bascule alors l'écran « nouveau mot de passe ».
+export function onPasswordRecovery(cb) {
+  if (!supabase) return () => {};
+  try {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") { try { cb(); } catch {} }
+    });
+    return () => { try { data.subscription.unsubscribe(); } catch {} };
+  } catch {
+    return () => {};
+  }
+}
+
 // Changement du mot de passe du compte connecté (site autonome).
 // Met à jour l'identifiant d'authentification Supabase de l'utilisateur
 // courant. Sans cloud (mode local), rien à faire côté serveur.
