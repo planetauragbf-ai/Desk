@@ -299,6 +299,12 @@ export async function saveState(d) {
     console.error(e);
   }
   if (!supabase) return;
+  // Garde-fou : ne JAMAIS écraser le cloud avec une liste de comptes vide.
+  // Un utilisateur interne figure toujours dans users[] ; un users vide
+  // trahit un état par défaut / non chargé (ou l'état filtré d'un adhérent,
+  // dont l'écriture est de toute façon refusée par la base). Propager un tel
+  // état effacerait tous les comptes — c'est ce qui avait vidé la liste.
+  if (!Array.isArray(d?.users) || d.users.length === 0) return;
   clearTimeout(syncTimer);
   syncTimer = setTimeout(async () => {
     try {
