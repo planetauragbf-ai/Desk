@@ -129,47 +129,69 @@ export async function loadState() {
 // l'application continue tant que le verrouillage n'est pas activé.
 export async function ensureCloudAuth(email, password) {
   // Site autonome uniquement (en mode intégré à Planet'Desk, la session
-  // Supabase de l'application interne est déjà ouverte et cette fonction
-  // n'est pas appelée). Le compte Supabase est créé au premier passage,
-  // avec le mot de passe saisi. La vérité reste le compte applicatif
-  // (état JSONB) : un inconnu qui s'inscrirait ici n'obtient aucune
-  // donnée — stock_state() ne reconnaît pas son email — et ne peut rien
-  // écrire (politique réservée aux internes).
+  // Supabase est déjà ouverte et cette fonction n'est pas appelée).
+  //
+  // Le mot de passe défini dans les données de l'application
+  // (app_state.users[].mdp) est la SEULE référence. Si l'authentification
+  // Supabase échoue (mot de passe divergent d'un appareil à l'autre), on
+  // appelle stock_sync_auth qui — quand l'identifiant applicatif est bon —
+  // resynchronise le mot de passe Supabase dessus, puis on réessaie. Un
+  // seul mot de passe, valable partout, qui se répare tout seul.
   if (!supabase) return { ok: true, mode: "local" };
+  const signIn = () =>
+    withTimeout(supabase.auth.signInWithPassword({ email, password }), 6000);
   try {
-    const { error } = await withTimeout(
-      supabase.auth.signInWithPassword({ email, password }),
-      6000
-    );
-    if (!error) return { ok: true, mode: "signin" };
-    if (/invalid login credentials/i.test(error.message || "")) {
+    const first = await signIn();
+    if (!first.error) return { ok: true, mode: "signin" };
+    const msg0 = first.error.message || "";
+    if (!/invalid login credentials|email not confirmed/i.test(msg0)) {
+      return { ok: false, msg: msg0 };
+    }
+
+    // Resynchronisation via le mot de passe applicatif (source de vérité).
+    // 'synced' : identifiant bon, mot de passe Supabase remis à jour.
+    // 'nouser' : identifiant bon mais pas encore de compte Supabase.
+    // 'bad'    : identifiant applicatif incorrect.
+    // 'error'  : fonction absente (SQL pas encore exécuté) → repli signUp.
+    let st = "error";
+    try {
+      const { data, error } = await withTimeout(
+        supabase.rpc("stock_sync_auth", { p_email: email, p_mdp: password }),
+        8000
+      );
+      if (!error && typeof data === "string") st = data;
+    } catch {}
+
+    if (st === "synced") {
+      const retry = await signIn();
+      if (!retry.error) return { ok: true, mode: "signin" };
+    }
+    if (st === "nouser" || st === "error") {
       const { data, error: e2 } = await withTimeout(
         supabase.auth.signUp({ email, password }),
         8000
       );
       if (!e2 && data?.session) return { ok: true, mode: "signup" };
-      // signUp sans erreur mais sans session : soit le compte vient d'être
-      // créé et attend une confirmation email, soit (Supabase masque
-      // l'existence) le compte existait déjà et le mot de passe est faux.
-      if (!e2)
+      if (st === "nouser" && !e2)
         return {
           ok: false,
-          msg: "Mot de passe incorrect, ou compte en attente de confirmation par email. Utilisez « Mot de passe oublié ? » pour définir un nouveau mot de passe.",
+          msg: "Compte créé. Si une confirmation par email est demandée, désactivez « Confirm email » dans Supabase (Authentication → Sign In / Providers → Email), puis reconnectez-vous.",
         };
-      // Le compte existe déjà : le mot de passe saisi est simplement faux.
-      if (/already\s*regist|already\s*exist|user\s*already/i.test(e2.message || ""))
+      if (st === "error" && !e2)
         return {
           ok: false,
-          msg: "Mot de passe incorrect. Cliquez « Mot de passe oublié ? » pour le réinitialiser.",
+          msg: "Mot de passe incorrect, ou compte en attente de confirmation par email.",
         };
-      return { ok: false, msg: e2.message };
     }
-    if (/email not confirmed/i.test(error.message || ""))
+    if (st === "bad")
       return {
         ok: false,
-        msg: "Compte non confirmé : cliquez le lien reçu par email, ou demandez à l'administrateur de désactiver la confirmation d'email dans Supabase.",
+        msg: "Mot de passe incorrect. Vérifiez la saisie (majuscules, correction automatique), ou faites redéfinir votre mot de passe dans l'onglet Utilisateurs.",
       };
-    return { ok: false, msg: error.message };
+    return {
+      ok: false,
+      msg: "Connexion impossible. Réessayez ; si cela persiste, faites redéfinir votre mot de passe dans l'onglet Utilisateurs.",
+    };
   } catch (e) {
     return { ok: false, msg: String(e?.message || e) };
   }
